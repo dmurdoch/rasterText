@@ -13,6 +13,7 @@
 #' @export
 #'
 #' @examples
+#' measure_text(c("a", "abc", "j"))
 measure_text <- function(text) {
   text <- enc2utf8(as.character(text))
   result <- .Call("measure_text", text, PACKAGE = "rasterText")

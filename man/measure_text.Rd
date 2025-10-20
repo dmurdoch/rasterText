@@ -21,3 +21,6 @@ a following string.}}
 \description{
 Measure some text (in pixels)
 }
+\examples{
+measure_text(c("a", "abc", "j"))
+}
