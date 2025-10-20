@@ -1,0 +1,20 @@
+Package: rasterText
+Type: Package
+Title: Test package for drawing text to a raster
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Duncan", "Murdoch",
+      email = "murdoch.duncan@gmail.com",
+      role = c("aut", "cre")
+    ),
+    person(
+      "Simon", "Urbanek",
+      role = "cph"
+    )
+  )
+Description: A simple text package to play with text
+    in a raster.
+License: GPL-2 or higher.
+Encoding: UTF-8
+RoxygenNote: 7.3.3
