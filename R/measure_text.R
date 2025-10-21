@@ -20,7 +20,7 @@ measure_text <- function(text, family = par3d("family"),
                          cex = par3d("cex")) {
   text <- enc2utf8(as.character(text))
   family <- as.character(family)
-  font <- as.integer(font) - 1L
+  font <- as.integer(font)
   size <- as.double(cex)*20
   result <- .Call("measure_text", text, family, font,
                   size, PACKAGE = "rasterText")
