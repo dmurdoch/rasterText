@@ -43,7 +43,11 @@ if test "xx$CAIRO_LIBS" = "xx"; then
          AC_MSG_RESULT([yes])
 	 AC_MSG_CHECKING([for configurable backends])
 	 modlist="cairo"
-
+	 for module in cairo-ft; do
+	    if "${PKGCONF}" --exists ${module}; then
+		modlist="${modlist} ${module}"
+	    fi
+	 done
 	 AC_MSG_RESULT(${modlist})
 	 CAIRO_CFLAGS=`"${PKGCONF}" --cflags ${modlist}`
 	 CAIRO_LIBS=`"${PKGCONF}" --libs ${modlist}`

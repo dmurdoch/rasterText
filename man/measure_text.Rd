@@ -4,10 +4,17 @@
 \alias{measure_text}
 \title{Measure some text (in pixels)}
 \usage{
-measure_text(text)
+measure_text(
+  text,
+  family = par3d("family"),
+  font = par3d("font"),
+  cex = par3d("cex")
+)
 }
 \arguments{
 \item{text}{A character string to measure}
+
+\item{family, font, cex}{Characteristics of the text}
 }
 \value{
 A matrix of measurements, one row per entry.
@@ -22,5 +29,5 @@ a following string.}}
 Measure some text (in pixels)
 }
 \examples{
-measure_text(c("a", "abc", "j"))
+measure_text(c("a", "abc", "j"), family = "serif")
 }

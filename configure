@@ -3595,7 +3595,11 @@ printf "%s\n" "yes" >&6; }
 	 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for configurable backends" >&5
 printf %s "checking for configurable backends... " >&6; }
 	 modlist="cairo"
-
+	 for module in cairo-ft; do
+	    if "${PKGCONF}" --exists ${module}; then
+		modlist="${modlist} ${module}"
+	    fi
+	 done
 	 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: ${modlist}" >&5
 printf "%s\n" "${modlist}" >&6; }
 	 CAIRO_CFLAGS=`"${PKGCONF}" --cflags ${modlist}`
