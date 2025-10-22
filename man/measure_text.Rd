@@ -8,6 +8,7 @@ measure_text(
   text,
   family = par3d("family"),
   font = par3d("font"),
+  fontfile = NULL,
   cex = par3d("cex")
 )
 }
@@ -15,6 +16,8 @@ measure_text(
 \item{text}{A character string to measure}
 
 \item{family, font, cex}{Characteristics of the text}
+
+\item{fontfile}{Freetype font file name, or NULL}
 }
 \value{
 A matrix of measurements, one row per entry.

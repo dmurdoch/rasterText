@@ -1,13 +1,18 @@
 #define R_NO_REMAP
 #include "cconfig.h"
 #include <cairo.h>
+#include <cairo-ft.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 #include <R.h>
 #include <Rinternals.h>
 
-SEXP measure_text(SEXP texts, SEXP family, SEXP font, SEXP size);
+SEXP measure_text(SEXP texts, SEXP family, SEXP font,
+                  SEXP fontfile, SEXP size);
 
 SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
-                         SEXP rgba, SEXP family, SEXP font, SEXP size,
+                         SEXP rgba, SEXP family, SEXP font,
+                         SEXP fontfile, SEXP size,
                          SEXP width, SEXP height);
 
 static void select_font_face(cairo_t *cr, const char *family, int font, double size) {
@@ -27,8 +32,26 @@ static void select_font_face(cairo_t *cr, const char *family, int font, double s
   cairo_set_font_size(cr, size);
 }
 
+static void select_font_file(cairo_t *cr, FT_Library ft,
+                             const char *fontfile, double size) {
+  // Load a font face
+  FT_Face face;
+  if (FT_New_Face(ft, fontfile, 0, &face)) {
+    Rprintf("Could not open font file: %s\n", fontfile);
+    FT_Done_FreeType(ft);
+    return;
+  }
 
-SEXP measure_text(SEXP texts, SEXP family, SEXP font, SEXP size) {
+  FT_Set_Pixel_Sizes(face, 0, (unsigned int)size);
+
+  cairo_font_face_t *cface = cairo_ft_font_face_create_for_ft_face(face, 0);
+  cairo_set_font_face(cr, cface);
+  cairo_set_font_size(cr, size);
+}
+
+SEXP measure_text(SEXP texts, SEXP family, SEXP font,
+                  SEXP fontfile, SEXP size) {
+
   /* texts must be UTF8 */
   SEXP result;
   int n = Rf_length(texts), m = 6;
@@ -40,12 +63,26 @@ SEXP measure_text(SEXP texts, SEXP family, SEXP font, SEXP size) {
   surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 100, 100);
   cr = cairo_create (surface);
 
-
-  select_font_face(cr, CHAR(STRING_ELT(family, 0)),
-                   INTEGER(font)[0] - 1, REAL(size)[0]);
+  FT_Library ft;
+  Rboolean useFreetype = !Rf_isNull(fontfile) &&
+                         !FT_Init_FreeType(&ft);
 
   cairo_text_extents_t te;
   for (int i=0; i < n; i++) {
+    if (!useFreetype) {
+      if (i == 0
+            || STRING_ELT(family, i) != STRING_ELT(family, i - 1)
+            || INTEGER(font)[i] != INTEGER(font)[i - 1]
+            || REAL(size)[i] != REAL(size)[i - 1])
+            select_font_face(cr, CHAR(STRING_ELT(family, i)),
+                             INTEGER(font)[i] - 1, REAL(size)[i]);
+    } else {
+      if (i == 0
+            || STRING_ELT(fontfile, i) != STRING_ELT(fontfile, i - 1)
+            || REAL(size)[i] != REAL(size)[i - 1])
+            select_font_file(cr, ft, CHAR(STRING_ELT(fontfile, i)),
+                             REAL(size)[i]);
+    }
     cairo_text_extents(cr, CHAR(STRING_ELT(texts, i)), &te);
     res[i]       = te.x_bearing;
     res[i + n]   = te.y_bearing;
@@ -57,6 +94,10 @@ SEXP measure_text(SEXP texts, SEXP family, SEXP font, SEXP size) {
   cairo_status_t status = cairo_status(cr);
   if (status != CAIRO_STATUS_SUCCESS)
     Rprintf("measure_text error: %s\n", cairo_status_to_string(status));
+
+  if (!Rf_isNull(fontfile))
+    FT_Done_FreeType(ft);
+
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
   UNPROTECT(1);
@@ -64,8 +105,10 @@ SEXP measure_text(SEXP texts, SEXP family, SEXP font, SEXP size) {
 }
 
 SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
-                         SEXP rgba, SEXP family, SEXP font, SEXP size,
+                         SEXP rgba, SEXP family, SEXP font,
+                         SEXP fontfile, SEXP size,
                          SEXP width, SEXP height) {
+
   /* texts must be UTF8 */
   int n = Rf_length(texts);
 
@@ -76,12 +119,30 @@ SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
                                         w, h);
   cr = cairo_create (surface);
 
-  select_font_face(cr, CHAR(STRING_ELT(family, 0)),
-                   INTEGER(font)[0] - 1, REAL(size)[0]);
-  double *c = REAL(rgba), *x0 = REAL(x), *y0 = REAL(y);
-  cairo_set_source_rgba(cr, c[0], c[1], c[2], c[3]);
+  FT_Library ft;
+  Rboolean useFreetype = !Rf_isNull(fontfile) &&
+    !FT_Init_FreeType(&ft);
+
+  double *x0 = REAL(x), *y0 = REAL(y);
+
   for (int i = 0; i < n; i++) {
+    if (!useFreetype) {
+      if (i == 0
+            || STRING_ELT(family, i) != STRING_ELT(family, i - 1)
+            || INTEGER(font)[i] != INTEGER(font)[i - 1]
+            || REAL(size)[i] != REAL(size)[i - 1])
+        select_font_face(cr, CHAR(STRING_ELT(family, i)),
+                       INTEGER(font)[i] - 1, REAL(size)[i]);
+    } else {
+      if (i == 0
+            || STRING_ELT(fontfile, i) != STRING_ELT(fontfile, i - 1)
+            || REAL(size)[i] != REAL(size)[i - 1])
+        select_font_file(cr, ft, CHAR(STRING_ELT(fontfile, i)),
+                       REAL(size)[i]);
+    }
     cairo_move_to(cr, x0[i], y0[i]);
+    double *c = REAL(rgba) + 4*i;
+    cairo_set_source_rgba(cr, c[0], c[1], c[2], c[3]);
     cairo_show_text(cr, CHAR(STRING_ELT(texts, i)));
   }
   cairo_surface_flush(surface);
@@ -99,6 +160,10 @@ SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
   cairo_status_t status = cairo_status(cr);
   if (status != CAIRO_STATUS_SUCCESS)
     Rprintf("draw_text error: %s\n", cairo_status_to_string(status));
+
+  if (!Rf_isNull(fontfile))
+    FT_Done_FreeType(ft);
+
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
 

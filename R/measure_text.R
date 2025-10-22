@@ -3,7 +3,7 @@
 #'
 #' @param text A character string to measure
 #' @param family,font,cex Characteristics of the text
-#'
+#' @param fontfile Freetype font file name, or NULL
 #' @returns A matrix of measurements, one row per entry.
 #' Columns are
 #' \describe{
@@ -17,13 +17,17 @@
 #' measure_text(c("a", "abc", "j"), family = "serif")
 measure_text <- function(text, family = par3d("family"),
                          font = par3d("font"),
+                         fontfile = NULL,
                          cex = par3d("cex")) {
   text <- enc2utf8(as.character(text))
-  family <- as.character(family)
-  font <- as.integer(font)
-  size <- as.double(cex)*20
+  n <- length(text)
+  family <- rep_len(as.character(family), n)
+  font <- rep_len(as.integer(font), n)
+  if (!is.null(fontfile))
+    fontfile <- rep_len(as.character(fontfile), n)
+  size <- rep_len(as.double(cex)*20, n)
   result <- .Call("measure_text", text, family, font,
-                  size, PACKAGE = "rasterText")
+                  fontfile, size, PACKAGE = "rasterText")
   matrix(result, ncol = 6,
          dimnames = list(NULL, c("x_bearing",
                                  "y_bearing",

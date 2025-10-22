@@ -9,6 +9,7 @@ draw_text_to_raster(
   family = par3d("family"),
   color = material3d("color")[1],
   font = par3d("font"),
+  fontfile = NULL,
   cex = par3d("cex")
 )
 }
@@ -18,6 +19,8 @@ draw_text_to_raster(
 \item{family, font, cex}{Characteristics of the text}
 
 \item{color}{Foreground color to draw}
+
+\item{fontfile}{Freetype font file name, or NULL}
 }
 \value{
 A list with components:
@@ -29,5 +32,5 @@ A list with components:
 Draw some text to a raster
 }
 \examples{
-draw_text_to_raster(c("a", "abc", "j"), family = "serif")
+draw_text_to_raster(paste("text ", 1:3), family="serif") |> image()
 }
