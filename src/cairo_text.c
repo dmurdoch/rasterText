@@ -7,13 +7,29 @@
 #include <R.h>
 #include <Rinternals.h>
 
-SEXP measure_text(SEXP texts, SEXP family, SEXP font,
+/* The version number will be an integer, changing only
+ * when the C API changes incompatibly
+ */
+
+void R_init_rasterText(DllInfo *dll);
+
+int API_version(void);
+
+SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
                   SEXP fontfile, SEXP size);
 
 SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
                          SEXP rgba, SEXP family, SEXP font,
                          SEXP fontfile, SEXP size,
                          SEXP width, SEXP height);
+
+double* measure_text(int n,
+                 const char *text[],
+                 const char *family,
+                 int font,
+                 const char *fontfile,
+                 double size,
+                 double *result);
 
 static void select_font_face(cairo_t *cr, const char *family, int font, double size) {
   cairo_font_slant_t slants[] = {CAIRO_FONT_SLANT_NORMAL,
@@ -49,14 +65,20 @@ static void select_font_file(cairo_t *cr, FT_Library ft,
   cairo_set_font_size(cr, size);
 }
 
-SEXP measure_text(SEXP texts, SEXP family, SEXP font,
-                  SEXP fontfile, SEXP size) {
+int API_version(void) {
+  return 1;
+}
 
-  /* texts must be UTF8 */
-  SEXP result;
-  int n = Rf_length(texts), m = 6;
-  PROTECT(result = Rf_allocVector(REALSXP, n*m));
-  double *res = REAL(result);
+/* In this one, texts is an array of char pointers,
+ * all of which share the same characteristics.  There
+ * are n elements in the array */
+
+double* measure_text(int n, const char *texts[], /* must be UTF-8! */
+                  const char *family,
+                  int font,
+                  const char *fontfile,
+                  double size,
+                  double *result) {
 
   cairo_surface_t *surface;
   cairo_t *cr;
@@ -64,42 +86,74 @@ SEXP measure_text(SEXP texts, SEXP family, SEXP font,
   cr = cairo_create (surface);
 
   FT_Library ft;
-  Rboolean useFreetype = !Rf_isNull(fontfile) &&
-                         !FT_Init_FreeType(&ft);
+  int useFreetype = fontfile && !FT_Init_FreeType(&ft);
 
   cairo_text_extents_t te;
+
+  if (!useFreetype)
+    select_font_face(cr, family, font - 1, size);
+  else
+    select_font_file(cr, ft, fontfile, size);
   for (int i=0; i < n; i++) {
-    if (!useFreetype) {
-      if (i == 0
-            || STRING_ELT(family, i) != STRING_ELT(family, i - 1)
-            || INTEGER(font)[i] != INTEGER(font)[i - 1]
-            || REAL(size)[i] != REAL(size)[i - 1])
-            select_font_face(cr, CHAR(STRING_ELT(family, i)),
-                             INTEGER(font)[i] - 1, REAL(size)[i]);
-    } else {
-      if (i == 0
-            || STRING_ELT(fontfile, i) != STRING_ELT(fontfile, i - 1)
-            || REAL(size)[i] != REAL(size)[i - 1])
-            select_font_file(cr, ft, CHAR(STRING_ELT(fontfile, i)),
-                             REAL(size)[i]);
-    }
-    cairo_text_extents(cr, CHAR(STRING_ELT(texts, i)), &te);
-    res[i]       = te.x_bearing;
-    res[i + n]   = te.y_bearing;
-    res[i + 2*n] = te.width;
-    res[i + 3*n] = te.height;
-    res[i + 4*n] = te.x_advance;
-    res[i + 5*n] = te.y_advance;
+    cairo_text_extents(cr, texts[i], &te);
+    *result++ = te.x_bearing;
+    *result++ = te.y_bearing;
+    *result++ = te.width;
+    *result++ = te.height;
+    *result++ = te.x_advance;
+    *result++ = te.y_advance;
   }
+
   cairo_status_t status = cairo_status(cr);
   if (status != CAIRO_STATUS_SUCCESS)
     Rprintf("measure_text error: %s\n", cairo_status_to_string(status));
 
-  if (!Rf_isNull(fontfile))
+  if (fontfile)
     FT_Done_FreeType(ft);
 
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
+  return result;
+}
+
+SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
+                   SEXP fontfile, SEXP size) {
+
+  /* texts must be UTF8 */
+  SEXP result;
+  int n = Rf_length(texts), m = 6, done = 0;
+  PROTECT(result = Rf_allocVector(REALSXP, n*m));
+  double *res = n > 0 ? REAL(result) : NULL;
+
+  SEXP family0, fontfile0;
+  int font0;
+  double size0;
+  Rboolean useFreetype = !Rf_isNull(fontfile);
+  for (int i=0; i <= n; i++) {
+    if(i == 0 || i == n ||
+       STRING_ELT(family, i) != family0 ||
+       INTEGER(font)[i] != font0 ||
+       REAL(size)[i] != size0 ||
+       (useFreetype && STRING_ELT(fontfile, i) != fontfile0)) {
+      /* make the call for the previous combination */
+      if (i > done) {
+        const char *text0[i - done];
+        for (int j = 0; j < i - done; j++)
+          text0[j] = CHAR(STRING_ELT(texts, j + done));
+
+        res = measure_text(i - done, text0, CHAR(family0),
+                     font0,
+                     useFreetype ? CHAR(fontfile0) : NULL,
+                     size0, res);
+        done = i;
+      }
+      family0 = STRING_ELT(family, i);
+      font0 = INTEGER(font)[i];
+      size0 = REAL(size)[i];
+      if (useFreetype)
+        fontfile0 = STRING_ELT(fontfile, i);
+    }
+  }
   UNPROTECT(1);
   return result;
 }
@@ -169,4 +223,28 @@ SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
 
   UNPROTECT(1);
   return result;
+}
+
+#define STRINGIZE(x) #x
+#define RNAME(name) STRINGIZE(C_##name)
+#define CALLDEF(name, n) {RNAME(name), (DL_FUNC) &name, n}
+
+static const R_CallMethodDef R_CallDef[] = {
+  CALLDEF(measure_textR, 5),
+  CALLDEF(draw_text_to_raster, 10),
+  {NULL, NULL, 0}
+};
+
+void R_init_rasterText(DllInfo *dll)
+{
+  R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);
+  R_useDynamicSymbols(dll, FALSE);
+  R_forceSymbols(dll, TRUE);
+
+  R_RegisterCCallable("rasterText", "API_version",
+                      (DL_FUNC)API_version);
+  R_RegisterCCallable("rasterText", "measure_text", (DL_FUNC)measure_text);
+  R_RegisterCCallable("rasterText", "measure_textR", (DL_FUNC)measure_textR);
+  R_RegisterCCallable("rasterText", "draw_text_to_raster",
+                      (DL_FUNC)draw_text_to_raster);
 }
