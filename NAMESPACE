@@ -2,5 +2,4 @@
 
 export(draw_text_to_raster)
 export(measure_text)
-importFrom(rgl,par3d)
 useDynLib(rasterText, .registration = TRUE)

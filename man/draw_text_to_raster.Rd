@@ -4,14 +4,7 @@
 \alias{draw_text_to_raster}
 \title{Draw some text to a raster}
 \usage{
-draw_text_to_raster(
-  text,
-  family = par3d("family"),
-  color = material3d("color")[1],
-  font = par3d("font"),
-  fontfile = NULL,
-  cex = par3d("cex")
-)
+draw_text_to_raster(text, family, color, font, fontfile = NULL, cex)
 }
 \arguments{
 \item{text}{A character string to measure}
@@ -32,5 +25,6 @@ A list with components:
 Draw some text to a raster
 }
 \examples{
-draw_text_to_raster(paste("text ", 1:3), family="serif") |> image()
+draw_text_to_raster(paste("text ", 1:3), family="serif",
+color = "black", font = 1, cex = 1) |> image()
 }

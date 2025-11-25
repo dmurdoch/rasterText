@@ -7,6 +7,14 @@
 #include <R.h>
 #include <Rinternals.h>
 
+/* The version number will be an integer, changing only
+ * when the C API changes
+ */
+
+void R_init_rasterText(DllInfo *dll);
+
+int API_version(void);
+
 SEXP measure_text(SEXP texts, SEXP family, SEXP font,
                   SEXP fontfile, SEXP size);
 
@@ -47,6 +55,10 @@ static void select_font_file(cairo_t *cr, FT_Library ft,
   cairo_font_face_t *cface = cairo_ft_font_face_create_for_ft_face(face, 0);
   cairo_set_font_face(cr, cface);
   cairo_set_font_size(cr, size);
+}
+
+int API_version(void) {
+  return 1;
 }
 
 SEXP measure_text(SEXP texts, SEXP family, SEXP font,
@@ -169,4 +181,28 @@ SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
 
   UNPROTECT(1);
   return result;
+}
+
+#define STRINGIZE(x) #x
+#define RNAME(name) STRINGIZE(C_##name)
+#define CALLDEF(name, n) {RNAME(name), (DL_FUNC) &name, n}
+
+static const R_CallMethodDef R_CallDef[] = {
+  CALLDEF(measure_text, 5),
+  CALLDEF(draw_text_to_raster, 10),
+  {NULL, NULL, 0}
+};
+
+void R_init_rasterText(DllInfo *dll)
+{
+  Rprintf("initializing rasterText\n");
+  R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);
+  R_useDynamicSymbols(dll, FALSE);
+  R_forceSymbols(dll, TRUE);
+
+  R_RegisterCCallable("rasterText", "API_version",
+                      (DL_FUNC)API_version);
+  R_RegisterCCallable("rasterText", "measure_text", (DL_FUNC)measure_text);
+  R_RegisterCCallable("rasterText", "draw_text_to_raster",
+                      (DL_FUNC)draw_text_to_raster);
 }
