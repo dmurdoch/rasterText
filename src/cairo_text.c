@@ -66,7 +66,7 @@ static void select_font_file(cairo_t *cr, FT_Library ft,
 }
 
 int API_version(void) {
-  return 1;
+  return 2;
 }
 
 /* In this one, texts is an array of char pointers,
