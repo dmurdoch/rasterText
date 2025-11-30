@@ -18,8 +18,8 @@ int API_version(void);
 SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
                   SEXP fontfile, SEXP size);
 
-SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
-                         SEXP rgba, SEXP family, SEXP font,
+SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
+                         SEXP family, SEXP font,
                          SEXP fontfile, SEXP size,
                          SEXP width, SEXP height);
 
@@ -30,6 +30,14 @@ double* measure_text(int n,
                  const char *fontfile,
                  double size,
                  double *result);
+
+int get_buffer_stride(int width);
+
+void draw_text_to_buffer(int n, double *x, double *y, const char *text[],
+                         const char *family, int font,
+                         const char *fontfile, double size,
+                         int width, int height, int stride,
+                         unsigned char *buffer);
 
 static void select_font_face(cairo_t *cr, const char *family, int font, double size) {
   cairo_font_slant_t slants[] = {CAIRO_FONT_SLANT_NORMAL,
@@ -82,7 +90,7 @@ double* measure_text(int n, const char *texts[], /* must be UTF-8! */
 
   cairo_surface_t *surface;
   cairo_t *cr;
-  surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 100, 100);
+  surface = cairo_image_surface_create (CAIRO_FORMAT_A8, 100, 100);
   cr = cairo_create (surface);
 
   FT_Library ft;
@@ -158,68 +166,111 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
   return result;
 }
 
-SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
-                         SEXP rgba, SEXP family, SEXP font,
+int get_buffer_stride(int width) {
+  return cairo_format_stride_for_width(CAIRO_FORMAT_A8, width);
+}
+
+/* draws alpha values to existing buffer of unsigned char. */
+
+void draw_text_to_buffer(int n, double *x, double *y, const char *text[],
+                         const char *family, int font,
+                         const char *fontfile, double size,
+                         int width, int height, int stride,
+                         unsigned char *buffer) {
+
+  /* texts must be UTF8 */
+  cairo_surface_t *surface;
+  cairo_t *cr;
+  surface = cairo_image_surface_create_for_data(buffer, CAIRO_FORMAT_A8,
+                                        width, height, stride);
+  cr = cairo_create (surface);
+
+  FT_Library ft;
+  int useFreetype = fontfile && !FT_Init_FreeType(&ft);
+
+  if (!useFreetype)
+    select_font_face(cr, family, font - 1, size);
+  else
+    select_font_file(cr, ft, fontfile, size);
+  for (int i = 0; i < n; i++) {
+      cairo_move_to(cr, x[i], y[i]);
+      cairo_show_text(cr, text[i]);
+    }
+    cairo_surface_flush(surface);
+    cairo_status_t status = cairo_status(cr);
+    if (status != CAIRO_STATUS_SUCCESS)
+      Rprintf("draw_text error: %s\n", cairo_status_to_string(status));
+
+    if (fontfile)
+      FT_Done_FreeType(ft);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surface);
+}
+
+SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
+                         SEXP family, SEXP font,
                          SEXP fontfile, SEXP size,
                          SEXP width, SEXP height) {
 
   /* texts must be UTF8 */
-  int n = Rf_length(texts);
+  int n = Rf_length(texts), m;
 
-  cairo_surface_t *surface;
-  cairo_t *cr;
-  int w = INTEGER(width)[0], h = INTEGER(height)[0];
-  surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-                                        w, h);
-  cr = cairo_create (surface);
+  const char *text0[n], *family0[n], *fontfile0[n];
+  int font0[n];
+  double size0[n];
+  for (int i = 0; i < n; i++) {
+    text0[i] = CHAR(STRING_ELT(texts, i));
+    if ((m = Rf_length(family)) > 0)
+      family0[i] = CHAR(STRING_ELT(family, i % m ));
+    else
+      family0[i] = 0;
+    if ((m = Rf_length(fontfile)) > 0)
+      fontfile0[i] = CHAR(STRING_ELT(fontfile, i % m));
+    else
+      fontfile0[i] = 0;
+    if ((m = Rf_length(font)) > 0)
+      font0[i] = INTEGER(font)[i % m];
+    else
+      font0[i] = 1;
+    if ((m = Rf_length(size)) > 0)
+      size0[i] = REAL(size)[i % m];
+    else
+      size0[i] = 1.0;
+  }
 
-  FT_Library ft;
-  Rboolean useFreetype = !Rf_isNull(fontfile) &&
-    !FT_Init_FreeType(&ft);
+  int w = INTEGER(width)[0], h = INTEGER(height)[0],
+      stride = get_buffer_stride(w);
+
+  unsigned char *buffer = calloc(stride*h, sizeof(unsigned char));
 
   double *x0 = REAL(x), *y0 = REAL(y);
-
-  for (int i = 0; i < n; i++) {
-    if (!useFreetype) {
-      if (i == 0
-            || STRING_ELT(family, i) != STRING_ELT(family, i - 1)
-            || INTEGER(font)[i] != INTEGER(font)[i - 1]
-            || REAL(size)[i] != REAL(size)[i - 1])
-        select_font_face(cr, CHAR(STRING_ELT(family, i)),
-                       INTEGER(font)[i] - 1, REAL(size)[i]);
-    } else {
-      if (i == 0
-            || STRING_ELT(fontfile, i) != STRING_ELT(fontfile, i - 1)
-            || REAL(size)[i] != REAL(size)[i - 1])
-        select_font_file(cr, ft, CHAR(STRING_ELT(fontfile, i)),
-                       REAL(size)[i]);
+  int done = 0;
+  for (int i = 1; i <= n; i++) {
+    if (i == n ||
+        size0[i] != size0[i - 1] ||
+        family0[i] != family0[i - 1] ||
+        font0[i] != font0[i - 1] ||
+        fontfile0[i] != fontfile0[i - 1]) {
+      draw_text_to_buffer(i - done, x0 + done, y0 + done, text0 + done,
+                          family0[done], font0[done],
+                          fontfile0[done], size0[done],
+                          w, h, stride,
+                          buffer);
+        done = i;
     }
-    cairo_move_to(cr, x0[i], y0[i]);
-    double *c = REAL(rgba) + 4*i;
-    cairo_set_source_rgba(cr, c[0], c[1], c[2], c[3]);
-    cairo_show_text(cr, CHAR(STRING_ELT(texts, i)));
   }
-  cairo_surface_flush(surface);
-  int stride = cairo_image_surface_get_stride(surface);
-  unsigned char *data = cairo_image_surface_get_data(surface);
+
   SEXP result;
   PROTECT(result = Rf_allocVector(INTSXP, w*h));
   int *res = INTEGER(result);
   int k = 0;
   for (int i = 0; i < h; i++) {
-    uint32_t *row = (uint32_t*)(data + i*stride);
+    unsigned char *row = buffer + i*stride;
     for (int j = 0; j < w; j++)
-      res[k++] = row[j] >> 24;
+      res[k++] = row[j];
   }
-  cairo_status_t status = cairo_status(cr);
-  if (status != CAIRO_STATUS_SUCCESS)
-    Rprintf("draw_text error: %s\n", cairo_status_to_string(status));
-
-  if (!Rf_isNull(fontfile))
-    FT_Done_FreeType(ft);
-
-  cairo_destroy(cr);
-  cairo_surface_destroy(surface);
+  free(buffer);
 
   UNPROTECT(1);
   return result;
@@ -231,7 +282,7 @@ SEXP draw_text_to_raster(SEXP x, SEXP y, SEXP texts,
 
 static const R_CallMethodDef R_CallDef[] = {
   CALLDEF(measure_textR, 5),
-  CALLDEF(draw_text_to_raster, 10),
+  CALLDEF(draw_text_to_rasterR, 9),
   {NULL, NULL, 0}
 };
 
@@ -244,7 +295,6 @@ void R_init_rasterText(DllInfo *dll)
   R_RegisterCCallable("rasterText", "API_version",
                       (DL_FUNC)API_version);
   R_RegisterCCallable("rasterText", "measure_text", (DL_FUNC)measure_text);
-  R_RegisterCCallable("rasterText", "measure_textR", (DL_FUNC)measure_textR);
-  R_RegisterCCallable("rasterText", "draw_text_to_raster",
-                      (DL_FUNC)draw_text_to_raster);
+  R_RegisterCCallable("rasterText", "draw_text_to_buffer",
+                      (DL_FUNC)draw_text_to_buffer);
 }

@@ -4,14 +4,12 @@
 \alias{draw_text_to_raster}
 \title{Draw some text to a raster}
 \usage{
-draw_text_to_raster(text, family, color, font, fontfile = NULL, cex)
+draw_text_to_raster(text, family, font, fontfile = NULL, cex)
 }
 \arguments{
 \item{text}{A character string to measure}
 
 \item{family, font, cex}{Characteristics of the text}
-
-\item{color}{Foreground color to draw}
 
 \item{fontfile}{Freetype font file name, or NULL}
 }
@@ -26,5 +24,5 @@ Draw some text to a raster
 }
 \examples{
 draw_text_to_raster(paste("text ", 1:3), family="serif",
-color = "black", font = 1, cex = 1) |> image()
+font = 1, cex = 1) |> image()
 }

@@ -2,7 +2,6 @@
 #' Draw some text to a raster
 #'
 #' @param text A character string to measure
-#' @param color Foreground color to draw
 #' @param family,font,cex Characteristics of the text
 #' @param fontfile Freetype font file name, or NULL
 #'
@@ -14,14 +13,12 @@
 #' @export
 #' @examples
 #' draw_text_to_raster(paste("text ", 1:3), family="serif",
-#' color = "black", font = 1, cex = 1) |> image()
-draw_text_to_raster <- function(text, family, color,
+#' font = 1, cex = 1) |> image()
+draw_text_to_raster <- function(text, family,
                          font, fontfile = NULL,
                          cex) {
   text <- enc2utf8(as.character(text))
   n <- length(text)
-  rgba <- rep_len(as.numeric(col2rgb(color, alpha = TRUE))/255,
-                  4*n)
   family <- rep_len(as.character(family), n)
   font <- rep_len(as.integer(font), n)
   if (!is.null(fontfile))
@@ -37,8 +34,7 @@ draw_text_to_raster <- function(text, family, color,
   x <- 1 - m[, "x_bearing"]
   top <- c(0, cumsum(m[seq_len(n-1), "height"] + 2)) + 1
   y <- top - m[, "y_bearing"]
-
-  result <- .Call(C_draw_text_to_raster, x, y, text, rgba, family, font,
+  result <- .Call(C_draw_text_to_rasterR, x, y, text, family, font,
                   fontfile, size, width, height)
   t(matrix(result, height, width, byrow = TRUE))[,height:1]
 }
