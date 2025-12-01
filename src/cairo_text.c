@@ -23,6 +23,12 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
                          SEXP fontfile, SEXP size,
                          SEXP width, SEXP height);
 
+SEXP pack_text_R(SEXP measure, SEXP width);
+
+/* NB:  This function fills `result` in the
+ * order a transposed R matrix would use, i.e.
+ * all values for the first text, then all for
+ * the second, etc. */
 double* measure_text(int n,
                  const char *text[],
                  const char *family,
@@ -30,6 +36,8 @@ double* measure_text(int n,
                  const char *fontfile,
                  double size,
                  double *result);
+
+int pack_text(int n, double *measures, double *placement, int width);
 
 int get_buffer_stride(int width);
 
@@ -81,12 +89,65 @@ int API_version(void) {
  * all of which share the same characteristics.  There
  * are n elements in the array */
 
+#define MT_NCOLS 6
+
+#define MT_X_BEARING(i) measures[MT_NCOLS*i + 0]
+#define MT_Y_BEARING(i) measures[MT_NCOLS*i + 1]
+#define MT_WIDTH(i) measures[MT_NCOLS*i + 2]
+#define MT_HEIGHT(i) measures[MT_NCOLS*i + 3]
+#define MT_X_ADVANCE(i) measures[MT_NCOLS*i + 4]
+#define MT_Y_ADVANCE(i) measures[MT_NCOLS*i + 5]
+
+#define PT_X(i) placement[i]
+#define PT_Y(i) placement[i + n]
+
+/* returns the height that has been used, and writes
+ * x and y into measures.  Uses greedy packing. */
+
+/* EXTRA is the extra buffering on each side of each
+ * string */
+#define EXTRA 1
+int pack_text(int n, double* measures, double* placement, int width) {
+  int *used = calloc(n, sizeof(int));
+  int usedwidth = EXTRA, usedheight = EXTRA, maxheight=0;
+  for (int i=0; i<n; i++) {
+    for (int j=i; j<n; j++) {
+      if (!used[j]) {
+        if (usedwidth + MT_WIDTH(j) + EXTRA > width) {
+          if (j > i) continue;
+          /* go to next line */
+          usedheight = usedheight + maxheight + EXTRA;
+          usedwidth = EXTRA;
+        }
+        PT_X(j) = usedwidth - MT_X_BEARING(j);
+        PT_Y(j) = usedheight - MT_Y_BEARING(j);
+        usedwidth += MT_WIDTH(j) + EXTRA;
+        if (MT_HEIGHT(j) > maxheight) maxheight = MT_HEIGHT(j);
+        used[j] = 1;
+      }
+    }
+  }
+  free(used);
+  return usedheight + maxheight + EXTRA;
+}
+
+SEXP pack_textR(SEXP measure, SEXP width) {
+  int n = Rf_length(measure) / MT_NCOLS;
+  SEXP placement;
+  PROTECT(placement = Rf_allocVector(REALSXP, 2*n));
+  int height = pack_text(n, REAL(measure), REAL(placement), INTEGER(width)[0]);
+  Rf_setAttrib(placement, Rf_install("width"), width);
+  Rf_setAttrib(placement, Rf_install("height"), Rf_ScalarInteger(height));
+  UNPROTECT(1);
+  return placement;
+}
+
 double* measure_text(int n, const char *texts[], /* must be UTF-8! */
                   const char *family,
                   int font,
                   const char *fontfile,
                   double size,
-                  double *result) {
+                  double *measures) {
 
   cairo_surface_t *surface;
   cairo_t *cr;
@@ -104,12 +165,12 @@ double* measure_text(int n, const char *texts[], /* must be UTF-8! */
     select_font_file(cr, ft, fontfile, size);
   for (int i=0; i < n; i++) {
     cairo_text_extents(cr, texts[i], &te);
-    *result++ = te.x_bearing;
-    *result++ = te.y_bearing;
-    *result++ = te.width;
-    *result++ = te.height;
-    *result++ = te.x_advance;
-    *result++ = te.y_advance;
+    MT_X_BEARING(i) = te.x_bearing;
+    MT_Y_BEARING(i) = te.y_bearing;
+    MT_WIDTH(i) = te.width;
+    MT_HEIGHT(i) = te.height;
+    MT_X_ADVANCE(i) = te.x_advance;
+    MT_Y_ADVANCE(i) = te.y_advance;
   }
 
   cairo_status_t status = cairo_status(cr);
@@ -121,7 +182,7 @@ double* measure_text(int n, const char *texts[], /* must be UTF-8! */
 
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
-  return result;
+  return measures + MT_NCOLS*n;
 }
 
 SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
@@ -129,7 +190,7 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 
   /* texts must be UTF8 */
   SEXP result;
-  int n = Rf_length(texts), m = 6, done = 0;
+  int n = Rf_length(texts), m = MT_NCOLS, done = 0;
   PROTECT(result = Rf_allocVector(REALSXP, n*m));
   double *res = n > 0 ? REAL(result) : NULL;
 
@@ -165,6 +226,7 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
   UNPROTECT(1);
   return result;
 }
+
 
 int get_buffer_stride(int width) {
   return cairo_format_stride_for_width(CAIRO_FORMAT_A8, width);
@@ -282,6 +344,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 
 static const R_CallMethodDef R_CallDef[] = {
   CALLDEF(measure_textR, 5),
+  CALLDEF(pack_textR, 2),
   CALLDEF(draw_text_to_rasterR, 9),
   {NULL, NULL, 0}
 };
@@ -295,6 +358,8 @@ void R_init_rasterText(DllInfo *dll)
   R_RegisterCCallable("rasterText", "API_version",
                       (DL_FUNC)API_version);
   R_RegisterCCallable("rasterText", "measure_text", (DL_FUNC)measure_text);
+  R_RegisterCCallable("rasterText", "get_buffer_stride", (DL_FUNC)get_buffer_stride);
+  R_RegisterCCallable("rasterText", "pack_text", (DL_FUNC)pack_text);
   R_RegisterCCallable("rasterText", "draw_text_to_buffer",
                       (DL_FUNC)draw_text_to_buffer);
 }

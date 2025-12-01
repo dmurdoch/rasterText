@@ -29,12 +29,11 @@ draw_text_to_raster <- function(text, family,
 
   # Add a single pixel margin on all sides
   width <- as.integer(max(m[, "width"] + 2))
-  height <- as.integer(sum(m[, "height"] + 2))
+  width <- as.integer(2^ceiling(log(width, 2)))
+  xy <- pack_text(m, width)
+  height <- as.integer(attr(xy, "height"))
 
-  x <- 1 - m[, "x_bearing"]
-  top <- c(0, cumsum(m[seq_len(n-1), "height"] + 2)) + 1
-  y <- top - m[, "y_bearing"]
-  result <- .Call(C_draw_text_to_rasterR, x, y, text, family, font,
+  result <- .Call(C_draw_text_to_rasterR, xy[,1], xy[,2], text, family, font,
                   fontfile, size, width, height)
   t(matrix(result, height, width, byrow = TRUE))[,height:1]
 }

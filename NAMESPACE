@@ -2,5 +2,6 @@
 
 export(draw_text_to_raster)
 export(measure_text)
+export(pack_text)
 importFrom(grDevices,col2rgb)
 useDynLib(rasterText, .registration = TRUE)
