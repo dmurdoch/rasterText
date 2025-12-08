@@ -23,7 +23,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
                          SEXP fontfile, SEXP size,
                          SEXP width, SEXP height);
 
-SEXP pack_text_R(SEXP measure, SEXP width);
+SEXP pack_text_R(SEXP texts, SEXP measure, SEXP width);
 
 /* NB:  This function fills `result` in the
  * order a transposed R matrix would use, i.e.
@@ -37,7 +37,8 @@ double* measure_text(int n,
                  double size,
                  double *result);
 
-int pack_text(int n, double *measures, double *placement, int width);
+int pack_text(int n, const char *texts[],
+              double *measures, double *placement, int width);
 
 int get_buffer_stride(int width);
 
@@ -107,7 +108,7 @@ int API_version(void) {
 /* EXTRA is the extra buffering on each side of each
  * string */
 #define EXTRA 1
-int pack_text(int n, double* measures, double* placement, int width) {
+int pack_text(int n, const char *texts[], double* measures, double* placement, int width) {
   int *used = calloc(n, sizeof(int));
   int usedwidth = EXTRA, usedheight = EXTRA, maxheight=0;
   for (int i=0; i<n; i++) {
@@ -124,6 +125,12 @@ int pack_text(int n, double* measures, double* placement, int width) {
         usedwidth += MT_WIDTH(j) + EXTRA;
         if (MT_HEIGHT(j) > maxheight) maxheight = MT_HEIGHT(j);
         used[j] = 1;
+        for (int k=j+1; k < n; k++)
+          if (!used[k] && !strcmp(texts[j], texts[k])) {
+            PT_X(k) = PT_X(j);
+            PT_Y(k) = PT_Y(j);
+            used[k] = 1;
+          }
       }
     }
   }
@@ -131,11 +138,14 @@ int pack_text(int n, double* measures, double* placement, int width) {
   return usedheight + maxheight + EXTRA;
 }
 
-SEXP pack_textR(SEXP measure, SEXP width) {
-  int n = Rf_length(measure) / MT_NCOLS;
+SEXP pack_textR(SEXP texts, SEXP measure, SEXP width) {
+  int n = Rf_length(texts);
   SEXP placement;
   PROTECT(placement = Rf_allocVector(REALSXP, 2*n));
-  int height = pack_text(n, REAL(measure), REAL(placement), INTEGER(width)[0]);
+  const char *text0[n];
+  for (int i = 0; i < n; i++)
+    text0[i] = CHAR(STRING_ELT(texts, i));
+  int height = pack_text(n, text0, REAL(measure), REAL(placement), INTEGER(width)[0]);
   Rf_setAttrib(placement, Rf_install("width"), width);
   Rf_setAttrib(placement, Rf_install("height"), Rf_ScalarInteger(height));
   UNPROTECT(1);
@@ -344,7 +354,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 
 static const R_CallMethodDef R_CallDef[] = {
   CALLDEF(measure_textR, 5),
-  CALLDEF(pack_textR, 2),
+  CALLDEF(pack_textR, 3),
   CALLDEF(draw_text_to_rasterR, 9),
   {NULL, NULL, 0}
 };
