@@ -25,24 +25,40 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 
 SEXP pack_text_R(SEXP texts, SEXP measure, SEXP width);
 
+/* This is currently a copy of
+ * cairo_text_extents_t
+ */
+typedef struct text_extents
+{
+  double height, width,
+         x_advance, x_bearing,
+         y_advance, y_bearing;
+} text_extents_t;
+
+typedef struct text_placement
+{
+  double x, y;
+} text_placement_t;
+
 /* NB:  This function fills `result` in the
  * order a transposed R matrix would use, i.e.
  * all values for the first text, then all for
  * the second, etc. */
-double* measure_text(int n,
+text_extents_t* measure_text(int n,
                  const char *text[],
                  const char *family,
                  int font,
                  const char *fontfile,
                  double size,
-                 double *result);
+                 text_extents_t *result);
 
 int pack_text(int n, const char *texts[],
-              double *measures, double *placement, int width);
+              text_extents_t* measures, text_placement_t *placement, int width);
 
 int get_buffer_stride(int width);
 
-void draw_text_to_buffer(int n, double *x, double *y, const char *text[],
+void draw_text_to_buffer(int n, const text_placement_t *xy,
+                         const char *text[],
                          const char *family, int font,
                          const char *fontfile, double size,
                          int width, int height, int stride,
@@ -83,52 +99,41 @@ static void select_font_file(cairo_t *cr, FT_Library ft,
 }
 
 int API_version(void) {
-  return 2;
+  return 4;
 }
 
 /* In this one, texts is an array of char pointers,
  * all of which share the same characteristics.  There
  * are n elements in the array */
 
-#define MT_NCOLS 6
-
-#define MT_X_BEARING(i) measures[MT_NCOLS*i + 0]
-#define MT_Y_BEARING(i) measures[MT_NCOLS*i + 1]
-#define MT_WIDTH(i) measures[MT_NCOLS*i + 2]
-#define MT_HEIGHT(i) measures[MT_NCOLS*i + 3]
-#define MT_X_ADVANCE(i) measures[MT_NCOLS*i + 4]
-#define MT_Y_ADVANCE(i) measures[MT_NCOLS*i + 5]
-
-#define PT_X(i) placement[i]
-#define PT_Y(i) placement[i + n]
-
 /* returns the height that has been used, and writes
- * x and y into measures.  Uses greedy packing. */
+ * x and y into placement.  Uses greedy packing. */
 
 /* EXTRA is the extra buffering on each side of each
  * string */
 #define EXTRA 1
-int pack_text(int n, const char *texts[], double* measures, double* placement, int width) {
+int pack_text(int n, const char *texts[], text_extents_t* measures,
+              text_placement_t* placement, int width) {
   int *used = calloc(n, sizeof(int));
   int usedwidth = EXTRA, usedheight = EXTRA, maxheight=0;
   for (int i=0; i<n; i++) {
     for (int j=i; j<n; j++) {
       if (!used[j]) {
-        if (usedwidth + MT_WIDTH(j) + EXTRA > width) {
+        if (usedwidth + measures[j].width + EXTRA > width) {
           if (j > i) continue;
           /* go to next line */
           usedheight = usedheight + maxheight + EXTRA;
           usedwidth = EXTRA;
         }
-        PT_X(j) = usedwidth - MT_X_BEARING(j);
-        PT_Y(j) = usedheight - MT_Y_BEARING(j);
-        usedwidth += MT_WIDTH(j) + EXTRA;
-        if (MT_HEIGHT(j) > maxheight) maxheight = MT_HEIGHT(j);
+        placement[j].x = usedwidth - measures[j].x_bearing;
+        placement[j].y = usedheight - measures[j].y_bearing;
+        usedwidth += measures[j].width + EXTRA;
+        if (measures[j].height > maxheight) maxheight = measures[j].height;
         used[j] = 1;
         for (int k=j+1; k < n; k++)
           if (!used[k] && !strcmp(texts[j], texts[k])) {
-            PT_X(k) = PT_X(j);
-            PT_Y(k) = PT_Y(j);
+            placement[k].x = placement[j].x;
+            placement[k].y = placement[j].y;
             used[k] = 1;
           }
       }
@@ -139,25 +144,43 @@ int pack_text(int n, const char *texts[], double* measures, double* placement, i
 }
 
 SEXP pack_textR(SEXP texts, SEXP measure, SEXP width) {
-  int n = Rf_length(texts);
+  int n = Rf_length(texts), height = 0;
   SEXP placement;
   PROTECT(placement = Rf_allocVector(REALSXP, 2*n));
-  const char *text0[n];
-  for (int i = 0; i < n; i++)
-    text0[i] = CHAR(STRING_ELT(texts, i));
-  int height = pack_text(n, text0, REAL(measure), REAL(placement), INTEGER(width)[0]);
+  if (n > 0) {
+    const char *text0[n];
+    text_extents_t text_extents[n];
+    text_placement_t text_placement[n];
+    for (int i = 0; i < n; i++) {
+      text0[i] = CHAR(STRING_ELT(texts, i));
+      text_extents[i].height = REAL(measure)[6*i];
+      text_extents[i].width = REAL(measure)[6*i+1];
+      text_extents[i].x_advance = REAL(measure)[6*i+2];
+      text_extents[i].x_bearing = REAL(measure)[6*i+3];
+      text_extents[i].y_advance = REAL(measure)[6*i+4];
+      text_extents[i].y_bearing = REAL(measure)[6*i+5];
+    }
+    height = pack_text(n, text0,
+                           text_extents,
+                           text_placement,
+                           INTEGER(width)[0]);
+    for (int i = 0; i < n; i++) {
+      REAL(placement)[i] = text_placement[i].x;
+      REAL(placement)[i+n] = text_placement[i].y;
+    }
+  }
   Rf_setAttrib(placement, Rf_install("width"), width);
   Rf_setAttrib(placement, Rf_install("height"), Rf_ScalarInteger(height));
   UNPROTECT(1);
   return placement;
 }
 
-double* measure_text(int n, const char *texts[], /* must be UTF-8! */
+text_extents_t* measure_text(int n, const char *texts[], /* must be UTF-8! */
                   const char *family,
                   int font,
                   const char *fontfile,
                   double size,
-                  double *measures) {
+                  text_extents_t *measures) {
 
   cairo_surface_t *surface;
   cairo_t *cr;
@@ -175,12 +198,12 @@ double* measure_text(int n, const char *texts[], /* must be UTF-8! */
     select_font_file(cr, ft, fontfile, size);
   for (int i=0; i < n; i++) {
     cairo_text_extents(cr, texts[i], &te);
-    MT_X_BEARING(i) = te.x_bearing;
-    MT_Y_BEARING(i) = te.y_bearing;
-    MT_WIDTH(i) = te.width;
-    MT_HEIGHT(i) = te.height;
-    MT_X_ADVANCE(i) = te.x_advance;
-    MT_Y_ADVANCE(i) = te.y_advance;
+    measures[i].x_bearing = te.x_bearing;
+    measures[i].y_bearing = te.y_bearing;
+    measures[i].width = te.width;
+    measures[i].height = te.height;
+    measures[i].x_advance = te.x_advance;
+    measures[i].y_advance = te.y_advance;
   }
 
   cairo_status_t status = cairo_status(cr);
@@ -192,7 +215,7 @@ double* measure_text(int n, const char *texts[], /* must be UTF-8! */
 
   cairo_destroy(cr);
   cairo_surface_destroy(surface);
-  return measures + MT_NCOLS*n;
+  return measures + n;
 }
 
 SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
@@ -200,37 +223,47 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 
   /* texts must be UTF8 */
   SEXP result;
-  int n = Rf_length(texts), m = MT_NCOLS, done = 0;
+  int n = Rf_length(texts), m = 6, done = 0;
   PROTECT(result = Rf_allocVector(REALSXP, n*m));
-  double *res = n > 0 ? REAL(result) : NULL;
+  if (n > 0) {
+    text_extents_t text_extents[n],
+                   *res = text_extents;
+    SEXP family0, fontfile0;
+    int font0;
+    double size0;
+    Rboolean useFreetype = !Rf_isNull(fontfile);
+    for (int i=0; i <= n; i++) {
+      if(i == 0 || i == n ||
+         STRING_ELT(family, i) != family0 ||
+         INTEGER(font)[i] != font0 ||
+         REAL(size)[i] != size0 ||
+         (useFreetype && STRING_ELT(fontfile, i) != fontfile0)) {
+        /* make the call for the previous combination */
+        if (i > done) {
+          const char *text0[i - done];
+          for (int j = 0; j < i - done; j++)
+            text0[j] = CHAR(STRING_ELT(texts, j + done));
 
-  SEXP family0, fontfile0;
-  int font0;
-  double size0;
-  Rboolean useFreetype = !Rf_isNull(fontfile);
-  for (int i=0; i <= n; i++) {
-    if(i == 0 || i == n ||
-       STRING_ELT(family, i) != family0 ||
-       INTEGER(font)[i] != font0 ||
-       REAL(size)[i] != size0 ||
-       (useFreetype && STRING_ELT(fontfile, i) != fontfile0)) {
-      /* make the call for the previous combination */
-      if (i > done) {
-        const char *text0[i - done];
-        for (int j = 0; j < i - done; j++)
-          text0[j] = CHAR(STRING_ELT(texts, j + done));
-
-        res = measure_text(i - done, text0, CHAR(family0),
-                     font0,
-                     useFreetype ? CHAR(fontfile0) : NULL,
-                     size0, res);
-        done = i;
+          res = measure_text(i - done, text0, CHAR(family0),
+                             font0,
+                             useFreetype ? CHAR(fontfile0) : NULL,
+                             size0, res);
+          done = i;
+        }
+        family0 = STRING_ELT(family, i);
+        font0 = INTEGER(font)[i];
+        size0 = REAL(size)[i];
+        if (useFreetype)
+          fontfile0 = STRING_ELT(fontfile, i);
       }
-      family0 = STRING_ELT(family, i);
-      font0 = INTEGER(font)[i];
-      size0 = REAL(size)[i];
-      if (useFreetype)
-        fontfile0 = STRING_ELT(fontfile, i);
+    }
+    for (int i=0; i < n; i++) {
+      REAL(result)[m*i + 0] = text_extents[i].height;
+      REAL(result)[m*i + 1] = text_extents[i].width;
+      REAL(result)[m*i + 2] = text_extents[i].x_advance;
+      REAL(result)[m*i + 3] = text_extents[i].x_bearing;
+      REAL(result)[m*i + 4] = text_extents[i].y_advance;
+      REAL(result)[m*i + 5] = text_extents[i].y_bearing;
     }
   }
   UNPROTECT(1);
@@ -244,7 +277,8 @@ int get_buffer_stride(int width) {
 
 /* draws alpha values to existing buffer of unsigned char. */
 
-void draw_text_to_buffer(int n, double *x, double *y, const char *text[],
+void draw_text_to_buffer(int n, const text_placement_t *xy,
+                         const char *text[],
                          const char *family, int font,
                          const char *fontfile, double size,
                          int width, int height, int stride,
@@ -265,7 +299,7 @@ void draw_text_to_buffer(int n, double *x, double *y, const char *text[],
   else
     select_font_file(cr, ft, fontfile, size);
   for (int i = 0; i < n; i++) {
-      cairo_move_to(cr, x[i], y[i]);
+      cairo_move_to(cr, xy[i].x, xy[i].y);
       cairo_show_text(cr, text[i]);
     }
     cairo_surface_flush(surface);
@@ -317,6 +351,11 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
   unsigned char *buffer = calloc(stride*h, sizeof(unsigned char));
 
   double *x0 = REAL(x), *y0 = REAL(y);
+  text_placement_t xy[n];
+  for (int i=0; i < n; i++) {
+    xy[i].x = x0[i];
+    xy[i].y = y0[i];
+  }
   int done = 0;
   for (int i = 1; i <= n; i++) {
     if (i == n ||
@@ -324,7 +363,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
         family0[i] != family0[i - 1] ||
         font0[i] != font0[i - 1] ||
         fontfile0[i] != fontfile0[i - 1]) {
-      draw_text_to_buffer(i - done, x0 + done, y0 + done, text0 + done,
+      draw_text_to_buffer(i - done, xy + done, text0 + done,
                           family0[done], font0[done],
                           fontfile0[done], size0[done],
                           w, h, stride,

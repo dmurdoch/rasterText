@@ -4,9 +4,11 @@
 \alias{pack_text}
 \title{Pack text}
 \usage{
-pack_text(measure, width)
+pack_text(text, measure, width)
 }
 \arguments{
+\item{text}{The text to pack, used to detect dups}
+
 \item{measure}{Result of `measure_text()`}
 
 \item{width}{Width in which to pack items}
@@ -18,7 +20,8 @@ A matrix of xy values, one per entry
 Pack text
 }
 \examples{
-m <- measure_text(c("a", "abc", "j"), family = "serif",
+text <- c("a", "abc", "j")
+m <- measure_text(text, family = "serif",
              font = 1, cex = 1)
-pack_text(m, max(m[, "width"]) + 2)
+pack_text(text, m, max(m[, "width"]) + 2)
 }

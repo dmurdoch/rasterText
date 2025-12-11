@@ -29,10 +29,10 @@ measure_text <- function(text, family,
   result <- .Call(C_measure_textR, text, family, font,
                   fontfile, size)
   matrix(result, ncol = 6, byrow = TRUE,
-         dimnames = list(NULL, c("x_bearing",
-                                 "y_bearing",
+         dimnames = list(NULL, c("height",
                                  "width",
-                                 "height",
                                  "x_advance",
-                                 "y_advance")))
+                                 "x_bearing",
+                                 "y_advance",
+                                 "y_bearing")))
 }
