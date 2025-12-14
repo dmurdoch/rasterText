@@ -28,11 +28,13 @@ measure_text <- function(text, family,
   size <- rep_len(as.double(cex)*20, n)
   result <- .Call(C_measure_textR, text, family, font,
                   fontfile, size)
-  matrix(result, ncol = 6, byrow = TRUE,
+  matrix(result, ncol = 8, byrow = TRUE,
          dimnames = list(NULL, c("height",
                                  "width",
                                  "x_advance",
                                  "x_bearing",
                                  "y_advance",
-                                 "y_bearing")))
+                                 "y_bearing",
+                                 "ascent",
+                                 "descent")))
 }

@@ -26,13 +26,14 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 SEXP pack_text_R(SEXP texts, SEXP measure, SEXP width);
 
 /* This is currently a copy of
- * cairo_text_extents_t
+ * cairo_text_extents_t, followed by ascent and descent from cairo_font_extents_t
  */
 typedef struct text_extents
 {
   double height, width,
          x_advance, x_bearing,
-         y_advance, y_bearing;
+         y_advance, y_bearing,
+         ascent, descent;
 } text_extents_t;
 
 typedef struct text_placement
@@ -99,7 +100,7 @@ static void select_font_file(cairo_t *cr, FT_Library ft,
 }
 
 int API_version(void) {
-  return 4;
+  return 5;
 }
 
 /* In this one, texts is an array of char pointers,
@@ -190,12 +191,17 @@ text_extents_t* measure_text(int n, const char *texts[], /* must be UTF-8! */
   FT_Library ft;
   int useFreetype = fontfile && !FT_Init_FreeType(&ft);
 
-  cairo_text_extents_t te;
 
   if (!useFreetype)
     select_font_face(cr, family, font - 1, size);
   else
     select_font_file(cr, ft, fontfile, size);
+
+  cairo_font_extents_t fe;
+  cairo_text_extents_t te;
+
+  cairo_font_extents(cr, &fe);
+
   for (int i=0; i < n; i++) {
     cairo_text_extents(cr, texts[i], &te);
     measures[i].x_bearing = te.x_bearing;
@@ -204,6 +210,8 @@ text_extents_t* measure_text(int n, const char *texts[], /* must be UTF-8! */
     measures[i].height = te.height;
     measures[i].x_advance = te.x_advance;
     measures[i].y_advance = te.y_advance;
+    measures[i].ascent = fe.ascent;
+    measures[i].descent = fe.descent;
   }
 
   cairo_status_t status = cairo_status(cr);
@@ -223,7 +231,7 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 
   /* texts must be UTF8 */
   SEXP result;
-  int n = Rf_length(texts), m = 6, done = 0;
+  int n = Rf_length(texts), m = 8, done = 0;
   PROTECT(result = Rf_allocVector(REALSXP, n*m));
   if (n > 0) {
     text_extents_t text_extents[n],
@@ -264,6 +272,8 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
       REAL(result)[m*i + 3] = text_extents[i].x_bearing;
       REAL(result)[m*i + 4] = text_extents[i].y_advance;
       REAL(result)[m*i + 5] = text_extents[i].y_bearing;
+      REAL(result)[m*i + 6] = text_extents[i].ascent;
+      REAL(result)[m*i + 7] = text_extents[i].descent;
     }
   }
   UNPROTECT(1);
