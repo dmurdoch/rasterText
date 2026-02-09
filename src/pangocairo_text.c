@@ -1,9 +1,9 @@
 #define R_NO_REMAP
-#include "cconfig.h"
-#include <cairo.h>
-#include <cairo-ft.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
+#include <fontconfig/fontconfig.h>
+#include <pango/pangocairo.h>  // Main PangoCairo integration
+#include <pango/pango.h>       // Pango layout and font handling
+#include <cairo.h>             // Base Cairo surface and context functions
+#include <stdlib.h>            // For malloc/free if you allocate buffers
 #include <R.h>
 #include <Rinternals.h>
 
@@ -28,13 +28,17 @@ SEXP pack_text_R(SEXP texts, SEXP measure, SEXP width);
 /* This is currently a copy of
  * cairo_text_extents_t, followed by ascent and descent from cairo_font_extents_t
  */
+
 typedef struct text_extents
 {
   double height, width,
          x_advance, x_bearing,
          y_advance, y_bearing,
-         ascent, descent;
+         ascent, descent,
+         baseline;
 } text_extents_t;
+
+#define EXTENT_SIZE 9
 
 typedef struct text_placement
 {
@@ -58,49 +62,16 @@ int pack_text(int n, const char *texts[],
 
 int get_buffer_stride(int width);
 
-void draw_text_to_buffer(int n, const text_placement_t *xy,
+void draw_text_to_buffer(int n,
+                         const text_placement_t *xy,
                          const char *text[],
                          const char *family, int font,
                          const char *fontfile, double size,
                          int width, int height, int stride,
                          unsigned char *buffer);
 
-static void select_font_face(cairo_t *cr, const char *family, int font, double size) {
-  cairo_font_slant_t slants[] = {CAIRO_FONT_SLANT_NORMAL,
-                                 CAIRO_FONT_SLANT_NORMAL,
-                                 CAIRO_FONT_SLANT_ITALIC,
-                                 CAIRO_FONT_SLANT_ITALIC};
-  cairo_font_weight_t weights[] = {CAIRO_FONT_WEIGHT_NORMAL,
-                                   CAIRO_FONT_WEIGHT_BOLD,
-                                   CAIRO_FONT_WEIGHT_NORMAL,
-                                   CAIRO_FONT_WEIGHT_BOLD};
-  cairo_select_font_face(cr,
-                         family,
-                         slants[font],
-                         weights[font]);
-
-  cairo_set_font_size(cr, size);
-}
-
-static void select_font_file(cairo_t *cr, FT_Library ft,
-                             const char *fontfile, double size) {
-  // Load a font face
-  FT_Face face;
-  if (FT_New_Face(ft, fontfile, 0, &face)) {
-    Rprintf("Could not open font file: %s\n", fontfile);
-    FT_Done_FreeType(ft);
-    return;
-  }
-
-  FT_Set_Pixel_Sizes(face, 0, (unsigned int)size);
-
-  cairo_font_face_t *cface = cairo_ft_font_face_create_for_ft_face(face, 0);
-  cairo_set_font_face(cr, cface);
-  cairo_set_font_size(cr, size);
-}
-
 int API_version(void) {
-  return 5;
+  return 6;
 }
 
 /* In this one, texts is an array of char pointers,
@@ -127,7 +98,7 @@ int pack_text(int n, const char *texts[], text_extents_t* measures,
           usedwidth = EXTRA;
         }
         placement[j].x = usedwidth - measures[j].x_bearing;
-        placement[j].y = usedheight - measures[j].y_bearing;
+        placement[j].y = usedheight - measures[j].y_bearing - measures[j].ascent;
         usedwidth += measures[j].width + EXTRA;
         if (measures[j].height > maxheight) maxheight = measures[j].height;
         used[j] = 1;
@@ -154,12 +125,14 @@ SEXP pack_textR(SEXP texts, SEXP measure, SEXP width) {
     text_placement_t text_placement[n];
     for (int i = 0; i < n; i++) {
       text0[i] = CHAR(STRING_ELT(texts, i));
-      text_extents[i].height = REAL(measure)[6*i];
-      text_extents[i].width = REAL(measure)[6*i+1];
-      text_extents[i].x_advance = REAL(measure)[6*i+2];
-      text_extents[i].x_bearing = REAL(measure)[6*i+3];
-      text_extents[i].y_advance = REAL(measure)[6*i+4];
-      text_extents[i].y_bearing = REAL(measure)[6*i+5];
+      text_extents[i].height = REAL(measure)[EXTENT_SIZE*i];
+      text_extents[i].width = REAL(measure)[EXTENT_SIZE*i+1];
+      text_extents[i].x_advance = REAL(measure)[EXTENT_SIZE*i+2];
+      text_extents[i].x_bearing = REAL(measure)[EXTENT_SIZE*i+3];
+      text_extents[i].y_advance = REAL(measure)[EXTENT_SIZE*i+4];
+      text_extents[i].y_bearing = REAL(measure)[EXTENT_SIZE*i+5];
+      text_extents[i].ascent = REAL(measure)[EXTENT_SIZE*i+6];
+      text_extents[i].descent = REAL(measure)[EXTENT_SIZE*i+7];
     }
     height = pack_text(n, text0,
                            text_extents,
@@ -176,54 +149,96 @@ SEXP pack_textR(SEXP texts, SEXP measure, SEXP width) {
   return placement;
 }
 
-text_extents_t* measure_text(int n, const char *texts[], /* must be UTF-8! */
-                  const char *family,
-                  int font,
-                  const char *fontfile,
-                  double size,
-                  text_extents_t *measures) {
+PangoFontDescription * getFontDesc(
+    const char *family,
+    int font,
+    const char *fontfile,
+    double size
+)
+{
+  char *family_name = NULL;
+  if (!fontfile)
+    family_name = strdup(family);
+  else {
+    FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)fontfile);
 
-  cairo_surface_t *surface;
-  cairo_t *cr;
-  surface = cairo_image_surface_create (CAIRO_FORMAT_A8, 100, 100);
-  cr = cairo_create (surface);
-
-  FT_Library ft;
-  int useFreetype = fontfile && !FT_Init_FreeType(&ft);
-
-
-  if (!useFreetype)
-    select_font_face(cr, family, font - 1, size);
-  else
-    select_font_file(cr, ft, fontfile, size);
-
-  cairo_font_extents_t fe;
-  cairo_text_extents_t te;
-
-  cairo_font_extents(cr, &fe);
-
-  for (int i=0; i < n; i++) {
-    cairo_text_extents(cr, texts[i], &te);
-    measures[i].x_bearing = te.x_bearing;
-    measures[i].y_bearing = te.y_bearing;
-    measures[i].width = te.width;
-    measures[i].height = te.height;
-    measures[i].x_advance = te.x_advance;
-    measures[i].y_advance = te.y_advance;
-    measures[i].ascent = fe.ascent;
-    measures[i].descent = fe.descent;
+    FcPattern *pattern = FcFreeTypeQuery((const FcChar8 *)fontfile, 0, NULL, NULL);
+    if (pattern) {
+      FcChar8 *fc_family;
+      if (FcPatternGetString(pattern, FC_FAMILY, 0, &fc_family) == FcResultMatch) {
+        family_name = strdup((char *)fc_family);
+      }
+      FcPatternDestroy(pattern);
+    }
+    if (!family_name)
+      family_name = strdup("sans");
   }
+  PangoFontDescription *desc = pango_font_description_new();
+  pango_font_description_set_family(desc, family_name);
+  pango_font_description_set_style(desc, font < 3 ? PANGO_STYLE_NORMAL : PANGO_STYLE_ITALIC);
+  pango_font_description_set_weight(desc, font % 2 == 1 ? PANGO_WEIGHT_NORMAL : PANGO_WEIGHT_BOLD);
+  pango_font_description_set_size(desc, size*PANGO_SCALE);
+  free(family_name);
+  return desc;
+}
 
-  cairo_status_t status = cairo_status(cr);
-  if (status != CAIRO_STATUS_SUCCESS)
-    Rprintf("measure_text error: %s\n", cairo_status_to_string(status));
+text_extents_t* measure_text(int n, const char *texts[], /* must be UTF-8! */
+          const char *family,
+          int font,
+          const char *fontfile,
+          double size,
+          text_extents_t *measures) {
+  if (!n)
+    return measures;
 
-  if (fontfile)
-    FT_Done_FreeType(ft);
+  cairo_surface_t *temp_surface = cairo_recording_surface_create(CAIRO_CONTENT_COLOR_ALPHA, NULL);
+  cairo_t *cr = cairo_create(temp_surface);
 
+  // Create Pango layout
+  PangoLayout *layout = pango_cairo_create_layout(cr);
+  PangoContext *context = pango_layout_get_context(layout);
+  // CRITICAL: Must match the measurement DPI (72.0)
+  pango_cairo_context_set_resolution(context, 72.0);
+  // Notify the layout that the context (DPI) has changed
+  pango_layout_context_changed(layout);
+  PangoFontDescription *desc = getFontDesc(family, font, fontfile, size);
+
+  pango_layout_set_font_description(layout, desc);
+
+  for (int i=0; i < n; i++)
+  {
+    pango_layout_set_text(layout, texts[i], -1);
+
+    // Get Font Metrics (Ascent/Descent)
+    PangoContext *context = pango_layout_get_context(layout);
+    PangoFontMetrics *font_metrics = pango_context_get_metrics(context, desc, NULL);
+
+    // Get Font Metrics (Ascent/Descent)
+    measures[i].ascent = round(pango_font_metrics_get_ascent(font_metrics) / (double)PANGO_SCALE);
+    measures[i].descent = round(pango_font_metrics_get_descent(font_metrics) / (double)PANGO_SCALE);
+    pango_font_metrics_unref(font_metrics);
+
+    // Get Logical/Ink Extents (Width/Height/Bearing)
+    PangoRectangle ink_rect, logical_rect;
+    pango_layout_get_extents(layout, &ink_rect, &logical_rect);
+
+    measures[i].x_bearing = round(ink_rect.x / (double)PANGO_SCALE);
+    measures[i].y_bearing = round(ink_rect.y / (double)PANGO_SCALE - measures[i].ascent);
+    measures[i].width     = round(ink_rect.width / (double)PANGO_SCALE);
+    measures[i].height    = round(ink_rect.height / (double)PANGO_SCALE);
+    measures[i].x_advance = round(logical_rect.width / (double)PANGO_SCALE);
+    measures[i].y_advance = 0;
+
+    PangoLayoutIter *iter = pango_layout_get_iter(layout);
+    measures[i].baseline = pango_layout_iter_get_baseline(iter) / PANGO_SCALE;
+    pango_layout_iter_free(iter);
+  }
+  // Cleanup
+  pango_font_description_free(desc);
+  g_object_unref(layout);
   cairo_destroy(cr);
-  cairo_surface_destroy(surface);
-  return measures + n;
+  cairo_surface_destroy(temp_surface);
+  return measures;
 }
 
 SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
@@ -231,8 +246,8 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 
   /* texts must be UTF8 */
   SEXP result;
-  int n = Rf_length(texts), m = 8, done = 0;
-  PROTECT(result = Rf_allocVector(REALSXP, n*m));
+  int n = Rf_length(texts), done = 0;
+  PROTECT(result = Rf_allocVector(REALSXP, n*EXTENT_SIZE));
   if (n > 0) {
     text_extents_t text_extents[n],
                    *res = text_extents;
@@ -266,14 +281,15 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
       }
     }
     for (int i=0; i < n; i++) {
-      REAL(result)[m*i + 0] = text_extents[i].height;
-      REAL(result)[m*i + 1] = text_extents[i].width;
-      REAL(result)[m*i + 2] = text_extents[i].x_advance;
-      REAL(result)[m*i + 3] = text_extents[i].x_bearing;
-      REAL(result)[m*i + 4] = text_extents[i].y_advance;
-      REAL(result)[m*i + 5] = text_extents[i].y_bearing;
-      REAL(result)[m*i + 6] = text_extents[i].ascent;
-      REAL(result)[m*i + 7] = text_extents[i].descent;
+      REAL(result)[EXTENT_SIZE*i + 0] = text_extents[i].height;
+      REAL(result)[EXTENT_SIZE*i + 1] = text_extents[i].width;
+      REAL(result)[EXTENT_SIZE*i + 2] = text_extents[i].x_advance;
+      REAL(result)[EXTENT_SIZE*i + 3] = text_extents[i].x_bearing;
+      REAL(result)[EXTENT_SIZE*i + 4] = text_extents[i].y_advance;
+      REAL(result)[EXTENT_SIZE*i + 5] = text_extents[i].y_bearing;
+      REAL(result)[EXTENT_SIZE*i + 6] = text_extents[i].ascent;
+      REAL(result)[EXTENT_SIZE*i + 7] = text_extents[i].descent;
+      REAL(result)[EXTENT_SIZE*i + 8] = text_extents[i].baseline;
     }
   }
   UNPROTECT(1);
@@ -289,39 +305,39 @@ int get_buffer_stride(int width) {
 
 void draw_text_to_buffer(int n, const text_placement_t *xy,
                          const char *text[],
-                         const char *family, int font,
-                         const char *fontfile, double size,
-                         int width, int height, int stride,
-                         unsigned char *buffer) {
+                                         const char *family, int font,
+                                         const char *fontfile, double size,
+                                         int width, int height, int stride,
+                                         unsigned char *buffer) {
 
-  /* texts must be UTF8 */
-  cairo_surface_t *surface;
-  cairo_t *cr;
-  surface = cairo_image_surface_create_for_data(buffer, CAIRO_FORMAT_A8,
-                                        width, height, stride);
-  cr = cairo_create (surface);
+  // Cairo A8 format: 1 byte per pixel (Alpha channel only)
+  cairo_surface_t *surface = cairo_image_surface_create_for_data(
+    buffer, CAIRO_FORMAT_A8, width, height, stride);
+  cairo_t *cr = cairo_create(surface);
 
-  FT_Library ft;
-  int useFreetype = fontfile && !FT_Init_FreeType(&ft);
+  PangoLayout *layout = pango_cairo_create_layout(cr);
+  PangoContext *context = pango_layout_get_context(layout);
+  // CRITICAL: Must match the measurement DPI (72.0)
+  pango_cairo_context_set_resolution(context, 72.0);
+  // Notify the layout that the context (DPI) has changed
+  pango_layout_context_changed(layout);
+  PangoFontDescription *desc = getFontDesc(family, font, fontfile, size);
+  pango_layout_set_font_description(layout, desc);
 
-  if (!useFreetype)
-    select_font_face(cr, family, font - 1, size);
-  else
-    select_font_file(cr, ft, fontfile, size);
+  cairo_set_source_rgba(cr, 1, 1, 1, 1);
   for (int i = 0; i < n; i++) {
-      cairo_move_to(cr, xy[i].x, xy[i].y);
-      cairo_show_text(cr, text[i]);
-    }
-    cairo_surface_flush(surface);
-    cairo_status_t status = cairo_status(cr);
-    if (status != CAIRO_STATUS_SUCCESS)
-      Rprintf("draw_text error: %s\n", cairo_status_to_string(status));
+    pango_layout_set_text(layout, text[i], -1);
 
-    if (fontfile)
-      FT_Done_FreeType(ft);
-
-    cairo_destroy(cr);
-    cairo_surface_destroy(surface);
+    // Pango renders at the baseline by default in many contexts, but
+    // pango_cairo_show_layout renders with the top-left of the logical
+    // box at the current point.
+    cairo_move_to(cr, xy[i].x, xy[i].y);
+    pango_cairo_show_layout(cr, layout);
+  }
+  pango_font_description_free(desc);
+  g_object_unref(layout);
+  cairo_destroy(cr);
+  cairo_surface_destroy(surface);
 }
 
 SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
