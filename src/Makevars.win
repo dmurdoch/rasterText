@@ -1,3 +1,0 @@
-
-PKG_CPPFLAGS=-I. -Iwin64 $(XTRA_PKG_CPPFLAGS)
-PKG_LIBS=win64/libcairo.a win64/libpixman-1.a -lgdi32 -lmsimg32
