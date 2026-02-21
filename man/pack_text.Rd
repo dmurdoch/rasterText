@@ -4,10 +4,10 @@
 \alias{pack_text}
 \title{Pack text}
 \usage{
-pack_text(text, measure, width)
+pack_text(key, measure, width)
 }
 \arguments{
-\item{text}{The text to pack, used to detect dups}
+\item{key}{Unique key for bitmap, used to detect dups}
 
 \item{measure}{Result of `measure_text()`}
 
@@ -20,8 +20,11 @@ A matrix of xy values, one per entry
 Pack text
 }
 \examples{
-text <- c("a", "abc", "j")
-m <- measure_text(text, family = "serif",
-             font = 1, cex = 1)
-pack_text(text, m, max(m[, "width"]) + 2)
+famnum <- rep(1:3, 8)
+family <- c("serif", "sans", "mono")[famnum]
+font <- rep(rep(1:4, each = 3), 2)
+cex <- rep(1:2, each = 12)
+m <- measure_text(family, family, font, NULL, cex)
+key <- paste(family, font, cex, sep="_")
+pack_text(key, m, max(m[, "width"]) + 2)
 }

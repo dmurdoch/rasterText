@@ -13,8 +13,11 @@
 #' a following string.}}
 #' @export
 #' @examples
-#' measure_text(c("a", "abc", "j"), family = "serif",
-#'              font = 1, cex = 1)
+#' famnum <- rep(1:3, 8)
+#' family <- c("serif", "sans", "mono")[famnum]
+#' font <- rep(rep(1:4, each = 3), 2)
+#' cex <- rep(1:2, each = 12)
+#' measure_text(family, family, font, NULL, cex)
 measure_text <- function(text, family,
                          font,
                          fontfile = NULL,

@@ -12,8 +12,11 @@
 #' @importFrom grDevices col2rgb
 #' @export
 #' @examples
-#' draw_text_to_raster(paste("text ", 1:3), family="serif",
-#' font = 1, cex = 1) |> image()
+#' famnum <- rep(1:3, 8)
+#' family <- c("serif", "sans", "mono")[famnum]
+#' font <- rep(rep(1:4, each = 3), 2)
+#' cex <- rep(1:2, each = 12)
+#' draw_text_to_raster(family, family, font, NULL, cex) |> image()
 draw_text_to_raster <- function(text, family,
                          font, fontfile = NULL,
                          cex) {
@@ -30,7 +33,8 @@ draw_text_to_raster <- function(text, family,
   # Add a single pixel margin on all sides
   width <- as.integer(max(m[, "width"] + 2))
   width <- as.integer(2^ceiling(log(width, 2)))
-  xy <- pack_text(text, m, width)
+  key <- paste(text, family, font, cex, sep="_")
+  xy <- pack_text(key, m, width)
   height <- as.integer(attr(xy, "height"))
 
   result <- .Call(C_draw_text_to_rasterR, xy[,1], xy[,2], text, family, font,

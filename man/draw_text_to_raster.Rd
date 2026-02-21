@@ -23,6 +23,9 @@ A list with components:
 Draw some text to a raster
 }
 \examples{
-draw_text_to_raster(paste("text ", 1:3), family="serif",
-font = 1, cex = 1) |> image()
+famnum <- rep(1:3, 8)
+family <- c("serif", "sans", "mono")[famnum]
+font <- rep(rep(1:4, each = 3), 2)
+cex <- rep(1:2, each = 12)
+draw_text_to_raster(family, family, font, NULL, cex) |> image()
 }

@@ -74,8 +74,9 @@ int API_version(void) {
   return 6;
 }
 
-/* In this one, texts is an array of char pointers,
- * all of which share the same characteristics.  There
+/* In this one, keys is an array of char pointers,
+ * all of which share the same characteristics. If the keys are equal,
+ * the bitmap can be reused. There
  * are n elements in the array */
 
 /* returns the height that has been used, and writes
@@ -84,7 +85,7 @@ int API_version(void) {
 /* EXTRA is the extra buffering on each side of each
  * string */
 #define EXTRA 1
-int pack_text(int n, const char *texts[], text_extents_t* measures,
+int pack_text(int n, const char *keys[], text_extents_t* measures,
               text_placement_t* placement, int width) {
   int *used = calloc(n, sizeof(int));
   int usedwidth = EXTRA, usedheight = EXTRA, maxheight=0;
@@ -103,7 +104,7 @@ int pack_text(int n, const char *texts[], text_extents_t* measures,
         if (measures[j].height > maxheight) maxheight = measures[j].height;
         used[j] = 1;
         for (int k=j+1; k < n; k++)
-          if (!used[k] && !strcmp(texts[j], texts[k])) {
+          if (!used[k] && !strcmp(keys[j], keys[k])) {
             placement[k].x = placement[j].x;
             placement[k].y = placement[j].y;
             used[k] = 1;
@@ -115,16 +116,16 @@ int pack_text(int n, const char *texts[], text_extents_t* measures,
   return usedheight + maxheight + EXTRA;
 }
 
-SEXP pack_textR(SEXP texts, SEXP measure, SEXP width) {
-  int n = Rf_length(texts), height = 0;
+SEXP pack_textR(SEXP keys, SEXP measure, SEXP width) {
+  int n = Rf_length(keys), height = 0;
   SEXP placement;
   PROTECT(placement = Rf_allocVector(REALSXP, 2*n));
   if (n > 0) {
-    const char *text0[n];
+    const char *key0[n];
     text_extents_t text_extents[n];
     text_placement_t text_placement[n];
     for (int i = 0; i < n; i++) {
-      text0[i] = CHAR(STRING_ELT(texts, i));
+      key0[i] = CHAR(STRING_ELT(keys, i));
       text_extents[i].height = REAL(measure)[EXTENT_SIZE*i];
       text_extents[i].width = REAL(measure)[EXTENT_SIZE*i+1];
       text_extents[i].x_advance = REAL(measure)[EXTENT_SIZE*i+2];
@@ -134,7 +135,7 @@ SEXP pack_textR(SEXP texts, SEXP measure, SEXP width) {
       text_extents[i].ascent = REAL(measure)[EXTENT_SIZE*i+6];
       text_extents[i].descent = REAL(measure)[EXTENT_SIZE*i+7];
     }
-    height = pack_text(n, text0,
+    height = pack_text(n, key0,
                            text_extents,
                            text_placement,
                            INTEGER(width)[0]);
@@ -157,7 +158,7 @@ PangoFontDescription * getFontDesc(
 )
 {
   char *family_name = NULL;
-  if (!fontfile)
+  if (!fontfile || !strlen(fontfile))
     family_name = strdup(family);
   else {
     FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)fontfile);
@@ -238,7 +239,7 @@ text_extents_t* measure_text(int n, const char *texts[], /* must be UTF-8! */
   g_object_unref(layout);
   cairo_destroy(cr);
   cairo_surface_destroy(temp_surface);
-  return measures;
+  return measures + n;
 }
 
 SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
