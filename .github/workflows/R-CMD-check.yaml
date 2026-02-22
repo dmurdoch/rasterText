@@ -35,7 +35,7 @@ jobs:
       - uses: r-lib/actions/setup-pandoc@v2
 
       - name: Install dependencies on Ubuntu
-        if: runner.os == 'Ubuntu'
+        if: runner.os == 'ubuntu'
         run: |
           apt-get install libpangocairo-1.0-0-dev
 
