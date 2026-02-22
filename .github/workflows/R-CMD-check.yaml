@@ -34,11 +34,12 @@ jobs:
 
       - uses: r-lib/actions/setup-pandoc@v2
 
-      - name: Install dependencies
+      - name: Install dependencies on Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install libpangocairo-1.0-0-dev
 
+      - name: Install dependencies on Windows
         if: runner.os == "Windows"
         run: |
           pacman -S mingw-w64-ucrt-x86_64-pango
