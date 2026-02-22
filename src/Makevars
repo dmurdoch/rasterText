@@ -1,2 +1,0 @@
-PKG_CPPFLAGS = $(shell pkg-config --cflags pangocairo)
-PKG_LIBS = $(shell pkg-config --libs pangocairo fontconfig) -liconv

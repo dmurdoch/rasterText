@@ -1,0 +1,53 @@
+@echo off
+:: configure.win for rasterText
+:: Uses Rtools' pkg-config to find PangoCairo and fontconfig
+
+:: Find pkg-config provided by Rtools/winlibs
+where pkg-config >nul 2>&1
+if errorlevel 1 (
+    echo ----------------------------------------------------------
+    echo ERROR: pkg-config not found.
+    echo Please install Rtools42 or later, which includes pkg-config
+    echo and the necessary winlibs packages.
+    echo https://cran.r-project.org/bin/windows/Rtools/
+    echo ----------------------------------------------------------
+    exit /b 1
+)
+
+:: Check for PangoCairo
+pkg-config --exists pangocairo
+if errorlevel 1 (
+    echo ----------------------------------------------------------
+    echo ERROR: PangoCairo not found by pkg-config.
+    echo Install it via the Rtools pacman environment:
+    echo   pacman -S mingw-w64-ucrt-x86_64-pango
+    echo ----------------------------------------------------------
+    exit /b 1
+)
+
+:: Check for fontconfig
+pkg-config --exists fontconfig
+if errorlevel 1 (
+    echo ----------------------------------------------------------
+    echo ERROR: fontconfig not found by pkg-config.
+    echo Install it via the Rtools pacman environment:
+    echo   pacman -S mingw-w64-ucrt-x86_64-fontconfig
+    echo ----------------------------------------------------------
+    exit /b 1
+)
+
+:: Retrieve flags
+for /f "delims=" %%i in ('pkg-config --cflags pangocairo fontconfig') do set PKG_CFLAGS=%%i
+for /f "delims=" %%i in ('pkg-config --libs pangocairo fontconfig') do set PKG_LIBS=%%i
+
+echo PKG_CFLAGS: %PKG_CFLAGS%
+echo PKG_LIBS:   %PKG_LIBS%
+
+:: Write src/Makevars.win from src/Makevars.in
+powershell -Command ^
+  "(Get-Content src\Makevars.in) ^
+   -replace '@PKG_CFLAGS@', '%PKG_CFLAGS%' ^
+   -replace '@PKG_LIBS@', '%PKG_LIBS%' ^
+   | Set-Content src\Makevars.win"
+
+echo Generated src\Makevars.win successfully.
