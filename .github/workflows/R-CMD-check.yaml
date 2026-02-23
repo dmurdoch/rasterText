@@ -51,7 +51,7 @@ jobs:
 
       - name: Manually install extra Rtools libs
         if: runner.os == 'Windows'
-run: |
+        run: |
           # 1. Ask R for the absolute path to 'make'
           $makePath = Rscript -e "cat(Sys.which('make'))"
           if (-not $makePath) {
