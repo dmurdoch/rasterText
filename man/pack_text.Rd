@@ -4,27 +4,38 @@
 \alias{pack_text}
 \title{Pack text}
 \usage{
-pack_text(key, measure, width)
+pack_text(key, measure, width = max(measure[, "width"] + 2))
 }
 \arguments{
 \item{key}{Unique key for bitmap, used to detect dups}
 
-\item{measure}{Result of `measure_text()`}
+\item{measure}{Result of \code{\link{measure_text}}}
 
 \item{width}{Width in which to pack items}
 }
 \value{
-A matrix of xy values, one per entry
+A matrix of xy values, one per entry.  These
+are the locations where the bitmap should be drawn.
 }
 \description{
 Pack text
+}
+\details{
+This function is designed to find a way to
+place bitmaps of all of the strings in a single
+raster.
+
+If any of the bitmaps are identical, only
+a single copy will be placed, and the addresses returned
+will contain duplicate entries.  You can avoid this
+by specifying unique keys, e.g. \code{seq_along(text)}.
 }
 \examples{
 famnum <- rep(1:3, 8)
 family <- c("serif", "sans", "mono")[famnum]
 font <- rep(rep(1:4, each = 3), 2)
-cex <- rep(1:2, each = 12)
-m <- measure_text(family, family, font, NULL, cex)
-key <- paste(family, font, cex, sep="_")
+text <- family
+m <- measure_text(text, family, font)
+key <- paste(text, family, font, sep="_")
 pack_text(key, m, max(m[, "width"]) + 2)
 }

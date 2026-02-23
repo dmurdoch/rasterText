@@ -2,9 +2,20 @@
 % Please edit documentation in R/draw_text_to_raster.R
 \name{draw_text_to_raster}
 \alias{draw_text_to_raster}
-\title{Draw some text to a raster}
+\title{Draw text to a raster}
 \usage{
-draw_text_to_raster(text, family, font, fontfile = NULL, cex)
+draw_text_to_raster(
+  text,
+  family = "sans",
+  font = 1,
+  fontfile = NULL,
+  cex = 1,
+  color = "black",
+  width = max(measure[, "width"] + 2),
+  height = attr(pack, "height"),
+  measure = measure_text(text, family, font, fontfile, cex),
+  pack = pack_text(key, measure, width)
+)
 }
 \arguments{
 \item{text}{A character string to measure}
@@ -12,20 +23,26 @@ draw_text_to_raster(text, family, font, fontfile = NULL, cex)
 \item{family, font, cex}{Characteristics of the text}
 
 \item{fontfile}{Freetype font file name, or NULL}
+
+\item{color}{The color to plot, or \code{NA} for
+monochrome}
+
+\item{width, height}{The dimensions of the output raster}
+
+\item{measure, pack}{Output of \code{\link{measure_text}} and \code{\link{pack_text}} respectively}
 }
 \value{
-A list with components:
-* raster, a native raster object.
-* locations, a matrix giving the locations of each
+A native raster object with attribute
+\code{locations}, a matrix giving the locations off each
   text string in the raster.
 }
 \description{
-Draw some text to a raster
+Draw text to a raster
 }
 \examples{
-famnum <- rep(1:3, 8)
-family <- c("serif", "sans", "mono")[famnum]
-font <- rep(rep(1:4, each = 3), 2)
-cex <- rep(1:2, each = 12)
-draw_text_to_raster(family, family, font, NULL, cex) |> image()
+text <- "Tokyo (\u6771\u4eac) \U1F600"
+mono <- draw_text_to_raster(text, color = NA)
+plot(mono)
+black <- draw_text_to_raster(text, color = "black")
+plot(black)
 }

@@ -1,20 +1,19 @@
 Package: rasterText
 Type: Package
-Title: Test package for drawing text to a raster
+Title: Draw text to a raster
 Version: 0.1.6
 Authors@R: c(
     person(
       "Duncan", "Murdoch",
       email = "murdoch.duncan@gmail.com",
       role = c("aut", "cre")
-    ),
-    person(
-      "Simon", "Urbanek",
-      role = "cph"
     )
   )
-Description: A simple text package to play with text
-    in a raster.
+Description: This package is mainly intended as a 
+  support for drawing text in the 'rgl' package, but should
+  be usable by other packages that need to render text
+  to a raster.  This can be done through R code or by
+  direct calls to the underlying C code.
 License: GPL (>= 2)
 Encoding: UTF-8
 Depends: R (>= 4.1.0)

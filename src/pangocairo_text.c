@@ -21,6 +21,8 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
                          SEXP family, SEXP font,
                          SEXP fontfile, SEXP size,
+                         SEXP monochrome,
+                         SEXP color,
                          SEXP width, SEXP height);
 
 SEXP pack_text_R(SEXP texts, SEXP measure, SEXP width);
@@ -60,18 +62,20 @@ text_extents_t* measure_text(int n,
 int pack_text(int n, const char *texts[],
               text_extents_t* measures, text_placement_t *placement, int width);
 
-int get_buffer_stride(int width);
+int get_buffer_stride(int width, Rboolean mono);
 
 void draw_text_to_buffer(int n,
                          const text_placement_t *xy,
                          const char *text[],
                          const char *family, int font,
                          const char *fontfile, double size,
+                         Rboolean mono,
+                         int *color,
                          int width, int height, int stride,
                          unsigned char *buffer);
 
 int API_version(void) {
-  return 6;
+  return 7;
 }
 
 /* In this one, keys is an array of char pointers,
@@ -300,22 +304,28 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 }
 
 
-int get_buffer_stride(int width) {
-  return cairo_format_stride_for_width(CAIRO_FORMAT_A8, width);
+int get_buffer_stride(int width, Rboolean mono) {
+  return cairo_format_stride_for_width(mono ? CAIRO_FORMAT_A8 : CAIRO_FORMAT_ARGB32, width);
 }
 
 /* draws alpha values to existing buffer of unsigned char. */
 
 void draw_text_to_buffer(int n, const text_placement_t *xy,
                          const char *text[],
-                                         const char *family, int font,
-                                         const char *fontfile, double size,
-                                         int width, int height, int stride,
-                                         unsigned char *buffer) {
+                         const char *family, int font,
+                         const char *fontfile, double size,
+                         Rboolean mono,
+                         int *color,
+                         int width, int height, int stride,
+                         unsigned char *buffer) {
 
   // Cairo A8 format: 1 byte per pixel (Alpha channel only)
+  // Cairo ARGB32 format:  alpha in high 8 bits, RGB
+  // in the rest, pre-multiplied alpha
   cairo_surface_t *surface = cairo_image_surface_create_for_data(
-    buffer, CAIRO_FORMAT_A8, width, height, stride);
+    buffer,
+    mono ? CAIRO_FORMAT_A8 : CAIRO_FORMAT_ARGB32,
+    width, height, stride);
   cairo_t *cr = cairo_create(surface);
 
   PangoLayout *layout = pango_cairo_create_layout(cr);
@@ -327,7 +337,11 @@ void draw_text_to_buffer(int n, const text_placement_t *xy,
   PangoFontDescription *desc = getFontDesc(family, font, fontfile, size);
   pango_layout_set_font_description(layout, desc);
 
-  cairo_set_source_rgba(cr, 1, 1, 1, 1);
+  if (mono)
+    cairo_set_source_rgba(cr, 1, 1, 1, 1);
+  else
+    cairo_set_source_rgba(cr, color[0]/255.0, color[1]/255.0,
+                              color[2]/255.0, color[3]/255.0);
   for (int i = 0; i < n; i++) {
     pango_layout_set_text(layout, text[i], -1);
 
@@ -346,11 +360,13 @@ void draw_text_to_buffer(int n, const text_placement_t *xy,
 SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
                          SEXP family, SEXP font,
                          SEXP fontfile, SEXP size,
+                         SEXP monochrome,
+                         SEXP color,
                          SEXP width, SEXP height) {
 
   /* texts must be UTF8 */
   int n = Rf_length(texts), m;
-
+  Rboolean mono = Rf_asBool(monochrome);
   const char *text0[n], *family0[n], *fontfile0[n];
   int font0[n];
   double size0[n];
@@ -375,8 +391,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
   }
 
   int w = INTEGER(width)[0], h = INTEGER(height)[0],
-      stride = get_buffer_stride(w);
-
+      stride = get_buffer_stride(w, mono);
   unsigned char *buffer = calloc(stride*h, sizeof(unsigned char));
 
   double *x0 = REAL(x), *y0 = REAL(y);
@@ -392,9 +407,15 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
         family0[i] != family0[i - 1] ||
         font0[i] != font0[i - 1] ||
         fontfile0[i] != fontfile0[i - 1]) {
-      draw_text_to_buffer(i - done, xy + done, text0 + done,
-                          family0[done], font0[done],
-                          fontfile0[done], size0[done],
+      draw_text_to_buffer(i - done,
+                          xy + done,
+                          text0 + done,
+                          family0[done],
+                          font0[done],
+                          fontfile0[done],
+                          size0[done],
+                          mono,
+                          INTEGER(color),
                           w, h, stride,
                           buffer);
         done = i;
@@ -402,13 +423,36 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
   }
 
   SEXP result;
-  PROTECT(result = Rf_allocVector(INTSXP, w*h));
+  PROTECT(result = Rf_allocVector(INTSXP, mono ? w*h : w*h*4));
   int *res = INTEGER(result);
   int k = 0;
   for (int i = 0; i < h; i++) {
-    unsigned char *row = buffer + i*stride;
-    for (int j = 0; j < w; j++)
-      res[k++] = row[j];
+    if (mono) {
+      unsigned char *row = buffer + i*stride;
+      for (int j = 0; j < w; j++)
+        res[k++] = row[j];
+    } else {
+      uint32_t *row32 = (uint32_t*)(buffer + i*stride);
+      for (int j = 0; j < w; j++) {
+        uint32_t* argb = row32 + j;
+        uint8_t a = (*argb) >> 24;
+        if (a == 0) {
+          res[k++] = 0;
+          res[k++] = 0;
+          res[k++] = 0;
+          res[k++] = 0;
+        } else {
+          uint8_t
+                r = ((((*argb) >> 16) & 0xFF) * 255) / a,
+                g = ((((*argb) >> 8) & 0xFF) * 255) / a,
+                b = (((*argb) & 0xFF) * 255) / a;
+          res[k++] = r;
+          res[k++] = g;
+          res[k++] = b;
+          res[k++] = a;
+        }
+      }
+    }
   }
   free(buffer);
 
@@ -423,7 +467,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 static const R_CallMethodDef R_CallDef[] = {
   CALLDEF(measure_textR, 5),
   CALLDEF(pack_textR, 3),
-  CALLDEF(draw_text_to_rasterR, 9),
+  CALLDEF(draw_text_to_rasterR, 10),
   {NULL, NULL, 0}
 };
 

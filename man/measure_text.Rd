@@ -4,7 +4,7 @@
 \alias{measure_text}
 \title{Measure some text (in pixels)}
 \usage{
-measure_text(text, family, font, fontfile = NULL, cex)
+measure_text(text, family = "sans", font = 1, fontfile = NULL, cex = 1)
 }
 \arguments{
 \item{text}{A character string to measure}
@@ -17,10 +17,14 @@ measure_text(text, family, font, fontfile = NULL, cex)
 A matrix of measurements, one row per entry.
 Columns are
 \describe{
+\item{height, width}{Size of the bounding box for the string}
 \item{x_bearing, y_bearing}{The displacement from the starting point to the upper left corner of the bounding box.}
-\item{width, height}{Size of the bounding box.}
 \item{x_advance, y_advance}{Suggested reference point for
-a following string.}}
+a following string.}
+\item{ascent, descent}{Amount the fonts used for each
+string rise above or descend below the baseline.}
+\item{baseline}{How far from the baseline to the top of the bounding box. }
+}
 }
 \description{
 Measure some text (in pixels)
