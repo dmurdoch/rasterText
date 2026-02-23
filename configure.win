@@ -1,0 +1,61 @@
+#!/bin/sh
+# configure script for the rasterText package
+# Detects PangoCairo and fontconfig using pkg-config
+
+# Check for pkg-config
+if ! command -v pkg-config >/dev/null 2>&1; then
+  echo "----------------------------------------------------"
+  echo "WARNING: pkg-config not found."
+  echo "PangoCairo and fontconfig flags will not be detected."
+  echo "----------------------------------------------------"
+  PANGOCAIRO_CFLAGS=""
+  PANGOCAIRO_LIBS=""
+  FONTCONFIG_CFLAGS=""
+  FONTCONFIG_LIBS=""
+else
+  # --- PangoCairo ---
+  if pkg-config --exists pangocairo; then
+    PANGOCAIRO_CFLAGS=$(pkg-config --cflags pangocairo)
+    PANGOCAIRO_LIBS=$(pkg-config --libs pangocairo)
+    echo "Found PangoCairo: CFLAGS=${PANGOCAIRO_CFLAGS}"
+    echo "Found PangoCairo: LIBS=${PANGOCAIRO_LIBS}"
+  else
+    echo "----------------------------------------------------"
+    echo "ERROR: PangoCairo was not found via pkg-config."
+    echo "Please install the PangoCairo development libraries."
+    echo "  Debian/Ubuntu:  sudo apt-get install libpangocairo-1.0-0-dev"
+    echo "  Fedora/RHEL:    sudo dnf install pango-devel"
+    echo "  macOS/Homebrew: brew install pango"
+    echo "----------------------------------------------------"
+    exit 1
+  fi
+
+  # --- fontconfig ---
+  if pkg-config --exists fontconfig; then
+    FONTCONFIG_CFLAGS=$(pkg-config --cflags fontconfig)
+    FONTCONFIG_LIBS=$(pkg-config --libs fontconfig)
+    echo "Found fontconfig: CFLAGS=${FONTCONFIG_CFLAGS}"
+    echo "Found fontconfig: LIBS=${FONTCONFIG_LIBS}"
+  else
+    echo "----------------------------------------------------"
+    echo "ERROR: fontconfig was not found via pkg-config."
+    echo "Please install the fontconfig development libraries."
+    echo "  Debian/Ubuntu:  sudo apt-get install libfontconfig1-dev"
+    echo "  Fedora/RHEL:    sudo dnf install fontconfig-devel"
+    echo "  macOS/Homebrew: brew install fontconfig"
+    echo "----------------------------------------------------"
+    exit 1
+  fi
+fi
+
+# Combine flags (dedup not strictly necessary, but tidy)
+PKG_CFLAGS="${PANGOCAIRO_CFLAGS} ${FONTCONFIG_CFLAGS}"
+PKG_LIBS="${PANGOCAIRO_LIBS} ${FONTCONFIG_LIBS}"
+
+# Write src/Makevars
+sed \
+  -e "s|@PKG_CFLAGS@|${PKG_CFLAGS}|g" \
+  -e "s|@PKG_LIBS@|${PKG_LIBS}|g" \
+  src/Makevars.in > src/Makevars
+
+echo "Generated src/Makevars successfully."
