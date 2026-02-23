@@ -38,7 +38,6 @@ jobs:
         with:
           r-version: ${{ matrix.config.r }}
           http-user-agent: ${{ matrix.config.http-user-agent }}
-          use-public-rspm: true
           update-rtools: true
 
       - name: Install dependencies on Linux
@@ -54,8 +53,21 @@ jobs:
 
       - name: Manually install extra Rtools libs
         if: runner.os == 'Windows'
-        run: |
-          $bashPath = "${env:RTOOLS44_HOME}\usr\bin\bash.exe"
+run: |
+          # 1. Ask R for the absolute path to 'make'
+          $makePath = Rscript -e "cat(Sys.which('make'))"
+          if (-not $makePath) {
+            Write-Error "Rtools 'make' not found. Ensure setup-r ran with update-rtools: true."
+            exit 1
+          }
+          # 2. Derive the Rtools root (make is usually in .../usr/bin/make.exe)
+          # We go up two levels from the file to get to the root
+          $rtoolsRoot = Split-Path (Split-Path (Split-Path $makePath -Parent) -Parent) -Parent
+          # 3. Construct the path to the bash shell
+          $bashPath = Join-Path $rtoolsRoot "usr\bin\bash.exe"
+          Write-Host "Detected Rtools Root: $rtoolsRoot"
+          Write-Host "Using Bash at: $bashPath"
+          # 4. Execute pacman
           & $bashPath -l -c "pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango mingw-w64-ucrt-x86_64-fontconfig"
         shell: pwsh
 
