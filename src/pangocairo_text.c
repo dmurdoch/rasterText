@@ -274,11 +274,13 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
                              size0, res);
           done = i;
         }
-        family0 = STRING_ELT(family, i);
-        font0 = INTEGER(font)[i];
-        size0 = REAL(size)[i];
-        if (useFreetype)
-          fontfile0 = STRING_ELT(fontfile, i);
+        if (i < n) {
+          family0 = STRING_ELT(family, i);
+          font0 = INTEGER(font)[i];
+          size0 = REAL(size)[i];
+          if (useFreetype)
+            fontfile0 = STRING_ELT(fontfile, i);
+        }
       }
     }
     for (int i=0; i < n; i++) {
