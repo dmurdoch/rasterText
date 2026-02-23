@@ -18,14 +18,14 @@ else
     PANGOCAIRO_CFLAGS=$(pkg-config --cflags pangocairo)
     PANGOCAIRO_LIBS=$(pkg-config --libs pangocairo)
     echo "Found PangoCairo: CFLAGS=${PANGOCAIRO_CFLAGS}"
-    echo "Found PangoCairo: LIBS=${PANGOCAIRO_LIBS}"
+    echo "                  LIBS=${PANGOCAIRO_LIBS}"
   else
     echo "----------------------------------------------------"
     echo "ERROR: PangoCairo was not found via pkg-config."
     echo "Please install the PangoCairo development libraries."
-    echo "  Debian/Ubuntu:  sudo apt-get install libpangocairo-1.0-0-dev"
+    echo "  Debian/Ubuntu:  sudo apt-get install libpango1.0-dev"
     echo "  Fedora/RHEL:    sudo dnf install pango-devel"
-    echo "  macOS/Homebrew: brew install pango"
+    echo "  macOS:          See https://mac.r-project.org/bin/"
     echo "----------------------------------------------------"
     exit 1
   fi
@@ -35,20 +35,20 @@ else
     FONTCONFIG_CFLAGS=$(pkg-config --cflags fontconfig)
     FONTCONFIG_LIBS=$(pkg-config --libs fontconfig)
     echo "Found fontconfig: CFLAGS=${FONTCONFIG_CFLAGS}"
-    echo "Found fontconfig: LIBS=${FONTCONFIG_LIBS}"
+    echo "                  LIBS=${FONTCONFIG_LIBS}"
   else
     echo "----------------------------------------------------"
     echo "ERROR: fontconfig was not found via pkg-config."
     echo "Please install the fontconfig development libraries."
     echo "  Debian/Ubuntu:  sudo apt-get install libfontconfig1-dev"
     echo "  Fedora/RHEL:    sudo dnf install fontconfig-devel"
-    echo "  macOS/Homebrew: brew install fontconfig"
+    echo "  macOS:          See https://mac.r-project.org/bin/"
     echo "----------------------------------------------------"
     exit 1
   fi
 fi
 
-# Combine flags (dedup not strictly necessary, but tidy)
+# Combine flags
 PKG_CFLAGS="${PANGOCAIRO_CFLAGS} ${FONTCONFIG_CFLAGS}"
 PKG_LIBS="${PANGOCAIRO_LIBS} ${FONTCONFIG_LIBS}"
 

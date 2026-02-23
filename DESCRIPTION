@@ -1,7 +1,7 @@
 Package: rasterText
 Type: Package
 Title: Draw text to a raster
-Version: 0.1.6
+Version: 0.1.7
 Authors@R: c(
     person(
       "Duncan", "Murdoch",
