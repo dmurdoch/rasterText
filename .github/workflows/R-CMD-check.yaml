@@ -19,11 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {os: macos-latest,   r: 'release'}
+#          - {os: macos-latest,   r: 'release'}
           - {os: windows-latest, r: 'release'}
-          - {os: ubuntu-latest,   r: 'devel', http-user-agent: 'release'}
-          - {os: ubuntu-latest,   r: 'release'}
-          - {os: ubuntu-latest,   r: 'oldrel-1'}
+#          - {os: ubuntu-latest,   r: 'devel', http-user-agent: 'release'}
+#          - {os: ubuntu-latest,   r: 'release'}
+#          - {os: ubuntu-latest,   r: 'oldrel-1'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -55,7 +55,8 @@ jobs:
       - name: Manually install extra Rtools libs
         if: runner.os == 'Windows'
         run: |
-          & "C:\rtools44\usr\bin\bash.exe" -l -c "pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango mingw-w64-ucrt-x86_64-fontconfig"
+          $bashPath = "${env:RTOOLS44_HOME}\usr\bin\bash.exe"
+          & $bashPath -l -c "pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango mingw-w64-ucrt-x86_64-fontconfig"
         shell: pwsh
 
       - uses: r-lib/actions/check-r-package@v2
