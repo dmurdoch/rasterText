@@ -467,7 +467,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 static const R_CallMethodDef R_CallDef[] = {
   CALLDEF(measure_textR, 5),
   CALLDEF(pack_textR, 3),
-  CALLDEF(draw_text_to_rasterR, 10),
+  CALLDEF(draw_text_to_rasterR, 11),
   {NULL, NULL, 0}
 };
 
