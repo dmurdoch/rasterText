@@ -62,14 +62,14 @@ text_extents_t* measure_text(int n,
 int pack_text(int n, const char *texts[],
               text_extents_t* measures, text_placement_t *placement, int width);
 
-int get_buffer_stride(int width, Rboolean mono);
+int get_buffer_stride(int width, int mono);
 
 void draw_text_to_buffer(int n,
                          const text_placement_t *xy,
                          const char *text[],
                          const char *family, int font,
                          const char *fontfile, double size,
-                         Rboolean mono,
+                         int mono,
                          int *color,
                          int width, int height, int stride,
                          unsigned char *buffer);
@@ -304,7 +304,7 @@ SEXP measure_textR(SEXP texts, SEXP family, SEXP font,
 }
 
 
-int get_buffer_stride(int width, Rboolean mono) {
+int get_buffer_stride(int width, int mono) {
   return cairo_format_stride_for_width(mono ? CAIRO_FORMAT_A8 : CAIRO_FORMAT_ARGB32, width);
 }
 
@@ -314,7 +314,7 @@ void draw_text_to_buffer(int n, const text_placement_t *xy,
                          const char *text[],
                          const char *family, int font,
                          const char *fontfile, double size,
-                         Rboolean mono,
+                         int mono,
                          int *color,
                          int width, int height, int stride,
                          unsigned char *buffer) {
@@ -366,7 +366,7 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 
   /* texts must be UTF8 */
   int n = Rf_length(texts), m;
-  Rboolean mono = Rf_asBool(monochrome);
+  int mono = INTEGER_ELT(monochrome, 0);
   const char *text0[n], *family0[n], *fontfile0[n];
   int font0[n];
   double size0[n];

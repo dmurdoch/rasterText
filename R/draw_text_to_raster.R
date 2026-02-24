@@ -52,7 +52,7 @@ draw_text_to_raster <- function(text, family = "sans",
                   as.numeric(pack[,1]), as.numeric(pack[,2]),
                   text, family, font,
                   fontfile, size,
-                  monochrome, col,
+                  as.integer(monochrome), col,
                   width, height)
   if (monochrome)
     result <- as.raster(matrix(result, height, width, byrow = TRUE),
