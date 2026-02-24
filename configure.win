@@ -23,7 +23,7 @@ else
     echo "----------------------------------------------------"
     echo "ERROR: PangoCairo was not found via pkg-config."
     echo "Please install Rtools and the PangoCairo development libraries using"
-    echo "  pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango""
+    echo "  pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango"
     echo "----------------------------------------------------"
     exit 1
   fi
