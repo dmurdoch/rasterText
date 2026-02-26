@@ -67,7 +67,7 @@ p
 #> attr(,"height")
 #> [1] 126
 raster <- draw_text_to_raster(text, family, font, cex = cex, measure=m, pack=p)
-image(raster)
+plot(raster)
 ```
 
 <img src="man/figures/README-example-1.png" width="100%" />

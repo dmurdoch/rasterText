@@ -59,5 +59,5 @@ m
 p <- pack_text(text, m, max(m[, "width"]))
 p
 raster <- draw_text_to_raster(text, family, font, cex = cex, measure=m, pack=p)
-image(raster)
+plot(raster)
 ```
