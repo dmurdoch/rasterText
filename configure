@@ -9,8 +9,10 @@ if ! command -v pkg-config >/dev/null 2>&1; then
   echo "PangoCairo and fontconfig flags will not be detected."
   echo "----------------------------------------------------"
   PANGOCAIRO_CFLAGS=""
+  PANGOCAIRO_CXXFLAGS=""
   PANGOCAIRO_LIBS=""
   FONTCONFIG_CFLAGS=""
+  FONTCONFIG_CXXFLAGS=""
   FONTCONFIG_LIBS=""
 else
   # --- PangoCairo ---
@@ -50,11 +52,13 @@ fi
 
 # Combine flags
 PKG_CFLAGS="${PANGOCAIRO_CFLAGS} ${FONTCONFIG_CFLAGS}"
+PKG_CXXFLAGS="${PKG_CFLAGS}"
 PKG_LIBS="${PANGOCAIRO_LIBS} ${FONTCONFIG_LIBS}"
 
 # Write src/Makevars
 sed \
   -e "s|@PKG_CFLAGS@|${PKG_CFLAGS}|g" \
+  -e "s|@PKG_CXXFLAGS@|${PKG_CXXFLAGS}|g" \
   -e "s|@PKG_LIBS@|${PKG_LIBS}|g" \
   src/Makevars.in > src/Makevars
 
