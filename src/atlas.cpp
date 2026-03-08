@@ -8,7 +8,7 @@
 
 using namespace textRaster;
 
-PangoFont* getFont(Font_record& font);
+PangoFont* getPangoFont(Font_record& font);
 
 Glyph_record::Glyph_record(const Glyph_record& prev) :
   atlas(prev.atlas),
@@ -32,18 +32,20 @@ void Glyph_record::setUV() {
 }
 
 void Glyph_record::Rprint(bool verbose) {
-  Rprintf("%5zu %5x %5d %5d %5d %5d %5d %5d\n",
+  Rprintf("%5zu %5x %5d %5d %5d %5d %5d %5d %8x\n",
           fontnum, glyph, x_atlas, y_atlas,
           width, height,
-          x, y);
+          x, y, color);
 }
 
 String_record::String_record(Glyph_atlas& in_atlas,
               const char* in_text,
-              size_t in_fontnum) :
+              size_t in_fontnum,
+              int in_color) :
   atlas(&in_atlas),
   text(in_text),
-  fontnum(in_fontnum) {}
+  fontnum(in_fontnum),
+  color(in_color) {}
 
 void String_record::Rprint(bool verbose) {
   Rprintf("\"%s\"\n  Font %zu\n  Glyph     xofs     yofs\n", text.c_str(), fontnum);
@@ -53,12 +55,13 @@ void String_record::Rprint(bool verbose) {
             glyphnum[i], x_offset[i], y_offset[i]);
 }
 
-Glyph_atlas::Glyph_atlas(int in_width, int in_height) :
+Glyph_atlas::Glyph_atlas(int in_width, int in_height, bool in_mono) :
   width(in_width),
   height(in_height),
+  mono(in_mono),
   buffer_generation(0),
   has_new_glyphs(false),
-  buffer(width*height, 0),
+  buffer(width*height*(mono ? 1 : 4), 0),
   last_x(0),
   last_y(0),
   row_height(0),
@@ -70,12 +73,13 @@ Glyph_atlas::~Glyph_atlas() {
   clearContext();
 }
 
-size_t Glyph_atlas::find_glyph(uint32_t glyph, size_t fontnum) {
+size_t Glyph_atlas::find_glyph(uint32_t glyph, size_t fontnum, int color) {
   for (size_t i=0; i < glyphs.size(); i++)
     if (glyphs[i].glyph == glyph &&
-        glyphs[i].fontnum  == fontnum)
+        glyphs[i].fontnum  == fontnum &&
+        (mono || glyphs[i].color == color))
       return i;
-    Glyph_record g(*this, glyph, fontnum);
+    Glyph_record g(*this, glyph, fontnum, color);
     return add_glyph(g);
 }
 
@@ -129,7 +133,7 @@ void Glyph_atlas::expand_atlas(Glyph_record& g) {
   if (new_width > width) {
     std::vector<unsigned char> old_buffer = buffer;
     int old_width = width, old_height = height;
-    buffer.assign(new_width*new_height, 0);
+    buffer.assign(new_width*new_height*(mono ? 1 : 4), 0);
     width = new_width;
     height = new_height;
     last_x = last_y = row_height = 0;
@@ -143,6 +147,7 @@ void Glyph_atlas::expand_atlas(Glyph_record& g) {
 void Glyph_atlas::copy_glyphs_to_buffer(int old_width,
                                         int old_height,
                                         std::vector<unsigned char> old_buffer) {
+  int pixelsize = mono ? 1 : 4;
   for (int i=0; i < glyphs.size(); i++) {
     Glyph_record& g = glyphs[i];
     if (g.width + 2 > width ||
@@ -158,10 +163,10 @@ void Glyph_atlas::copy_glyphs_to_buffer(int old_width,
       row_height = std::max(row_height, g.height);
 
     for (int j=0; j<g.height; j++) {
-      int old_start = old_width*(g.y_atlas + j) + g.x_atlas,
-        new_start = width*(last_y + 1 + j) + last_x + 1;
+      int old_start = (old_width*(g.y_atlas + j) + g.x_atlas)*pixelsize,
+        new_start = (width*(last_y + 1 + j) + last_x + 1)*pixelsize;
       std::copy(old_buffer.begin() + old_start,
-                old_buffer.begin() + old_start + g.width,
+                old_buffer.begin() + old_start + g.width*pixelsize,
                 buffer.begin() + new_start);
     }
     g.x_atlas = last_x + 1;
@@ -172,27 +177,28 @@ void Glyph_atlas::copy_glyphs_to_buffer(int old_width,
   has_new_glyphs = true;
 }
 
-void test_atlas(Glyph_atlas& atlas, const char* text, int rfont, int size);
+void test_atlas(Glyph_atlas& atlas, const char* text, int rfont, int size, int color = 0xFF);
 
 extern "C" {
   SEXP test_atlasR(SEXP text);
 
   SEXP test_atlasR(SEXP text) {
-    Glyph_atlas atlas(8, 8);
+    Glyph_atlas atlas(8, 8, false);
     for (int i=0; i < Rf_length(text); i++)
-      test_atlas(atlas, CHAR(STRING_ELT(text, i)), i%4 + 1, 12+i);
+      test_atlas(atlas, CHAR(STRING_ELT(text, i)), i%4 + 1, 12+i, 0xFF0000FF);
     atlas.Rprint(false);
     SEXP result;
     int w = atlas.width, h = atlas.height,
-      mono = 1, stride = mono ? w : w*4;
-    if (mono)
+      pixelsize = atlas.mono ? 1 : 4,
+      stride = w*pixelsize;
+    if (atlas.mono)
       PROTECT(result = Rf_allocMatrix(INTSXP, w, h));
     else
-      PROTECT(result = Rf_alloc3DArray(INTSXP, w, h, 4));
+      PROTECT(result = Rf_alloc3DArray(INTSXP, 4, h, w));
     int *res = INTEGER(result);
     int k = 0;
     for (int i = 0; i < h; i++) {
-      if (mono) {
+      if (atlas.mono) {
         unsigned char *row = atlas.buffer.data() + i*stride;
         for (int j = 0; j < w; j++)
           res[k++] = row[j];
@@ -224,11 +230,11 @@ extern "C" {
   }
 }
 
-void test_atlas(Glyph_atlas& atlas, const char* text, int rfont, int size) {
+void test_atlas(Glyph_atlas& atlas, const char* text, int rfont, int size, int color) {
     Rprintf("testing with text=%s\n", text);
     void *font = atlas.getFont("serif", rfont, nullptr, size);
     size_t fontnum = atlas.find_font(font);
-    atlas.find_string(text, fontnum);
+    atlas.find_string(text, fontnum, color);
   }
 
 
@@ -277,6 +283,12 @@ Pango_Cairo_Context* getContexts(Glyph_atlas& atlas) {
 }
 
 void clearContexts(Glyph_atlas& atlas) {
+  for (int i=0; i < atlas.fonts.size(); i++) {
+    if (atlas.fonts[i].font) {
+      g_object_unref(atlas.fonts[i].font);
+      atlas.fonts[i].font = nullptr;
+    }
+  }
   auto contexts = getContexts(atlas);
   if (contexts->pcontext) {
     g_object_unref(contexts->pcontext);
@@ -312,10 +324,6 @@ void Font_record::setFont(void* new_font) {
   font = new_font;
 }
 
-PangoFont* getPangoFont(Font_record& font) {
-  return static_cast<PangoFont*>(font.font);
-}
-
 void Font_record::Rprint(bool verbose) {
   Rprintf("%8x %s\n", hash, description.c_str());
 }
@@ -334,10 +342,10 @@ void* Glyph_atlas::getFont(const char *family, int font,
 cairo_surface_t* getCairoSurface(Glyph_atlas& atlas) {
   auto contexts = getContexts(atlas);
   if (!contexts->csurface) {
-    int stride = atlas.width;
+    int stride = atlas.width*(atlas.mono ? 1 : 4);
     contexts->csurface = cairo_image_surface_create_for_data(
       atlas.buffer.data(),
-      CAIRO_FORMAT_A8,
+      atlas.mono ? CAIRO_FORMAT_A8 : CAIRO_FORMAT_ARGB32,
       atlas.width,
       atlas.height,
       stride
@@ -365,7 +373,7 @@ PangoContext* getPangoContext(Glyph_atlas& atlas) {
   return contexts->pcontext;
 }
 
-PangoFont* getFont(Font_record& font) {
+PangoFont* getPangoFont(Font_record& font) {
 
   if (font.font) return static_cast<PangoFont*>(font.font);
 
@@ -390,15 +398,15 @@ Font_record::~Font_record() {
 }
 
 Glyph_record::Glyph_record(Glyph_atlas& in_atlas,
-                           uint32_t in_glyph, size_t in_font) :
+                           uint32_t in_glyph, size_t in_font, int in_color) :
   atlas(&in_atlas),
   glyph(in_glyph),
   fontnum(in_font),
-  color(0x000000FF),
+  color(in_color),
   x_atlas(0),
   y_atlas(0){
   PangoRectangle ink_rect;
-  pango_font_get_glyph_extents(getFont(atlas->fonts[fontnum]), glyph, &ink_rect, NULL);
+  pango_font_get_glyph_extents(getPangoFont(atlas->fonts[fontnum]), glyph, &ink_rect, NULL);
   width = PANGO_PIXELS_CEIL(ink_rect.width);
   height = PANGO_PIXELS_CEIL(ink_rect.height);
 
@@ -439,21 +447,20 @@ size_t Glyph_atlas::find_font(void* font) {
   return fonts.size()-1;
 }
 
-size_t Glyph_atlas::find_string(const char *text, size_t fontnum, int mono, int*color) {
+size_t Glyph_atlas::find_string(const char *text, size_t fontnum, int color) {
   for (size_t i=0; i < strings.size(); i++)
     if (strings[i].text == text &&
-        strings[i].fontnum == fontnum)
+        strings[i].fontnum == fontnum &&
+        (mono || strings[i].color == color))
       return i;
-  return add_string(text, fontnum, mono, color);
+  return add_string(text, fontnum, color);
 }
 
 size_t Glyph_atlas::add_string(const char *text, size_t fontnum,
-                             int mono,
-                             int *color) {
-  if (!mono)
-    Rf_error("Colour rendering not implemented yet");
+                             int color) {
 
-  String_record string(*this, text, fontnum);
+  String_record string(*this, text, fontnum,
+                       color);
   float x = 0.0, y = 0.0; /* current position */
 
   PangoContext *context = getPangoContext(*this);
@@ -484,7 +491,7 @@ size_t Glyph_atlas::add_string(const char *text, size_t fontnum,
     hb_glyph_info_t *hb_info = hb_buffer_get_glyph_infos(hb_buffer, &glyph_count);
     hb_glyph_position_t *hb_pos = hb_buffer_get_glyph_positions(hb_buffer, &glyph_count);
     for (size_t i = 0; i < glyph_count; i++) {
-      size_t glyphnum = find_glyph(hb_info[i].codepoint, fontnum);
+      size_t glyphnum = find_glyph(hb_info[i].codepoint, fontnum, color);
 
       string.glyphnum.push_back(glyphnum);
 
@@ -507,8 +514,6 @@ size_t Glyph_atlas::add_string(const char *text, size_t fontnum,
 
 void Glyph_atlas::draw_glyph_to_buffer(Glyph_record& g, int x, int y) {
 
-  cairo_surface_t* surface = getCairoSurface(*this);
-
   cairo_t* cr = getCairoContext(*this);
 
   PangoGlyphInfo pg;
@@ -524,7 +529,15 @@ void Glyph_atlas::draw_glyph_to_buffer(Glyph_record& g, int x, int y) {
   double x_pos = -g.x;
   double y_pos = -g.y;
 
-  cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0); // Set "Alpha" to 1.0
+  if (mono)
+    cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 1.0); // Set "Alpha" to 1.0
+  else {
+    double red = (g.color >> 24)/255.0,
+           green = (g.color >> 16 & 0xFF)/255.0,
+           blue = (g.color >> 8 & 0xFF)/255.0,
+           alpha = (g.color & 0xFF)/255.0;
+    cairo_set_source_rgba(cr, red, green, blue, alpha);
+  }
   cairo_move_to(cr, x + x_pos, y + y_pos);
   PangoFont* font = getPangoFont(g.atlas->fonts[g.fontnum]);
   pango_cairo_show_glyph_string(cr, font, gs);

@@ -35,7 +35,8 @@ struct Glyph_record
 {
   Glyph_record(Glyph_atlas& in_atlas,
                uint32_t glyph,
-               size_t fontnum);
+               size_t fontnum,
+               int color = 0xFF);
   Glyph_record(const Glyph_record& prev);
   void Rprint(bool verbose = true);
 
@@ -57,13 +58,15 @@ struct String_record
 {
   String_record(Glyph_atlas& in_atlas,
                 const char* in_text,
-                size_t in_fontnum);
+                size_t in_fontnum,
+                int in_color = 0xFF);
   void Rprint(bool verbose = true);
 
   Glyph_atlas* atlas;
 
   std::string text;
   size_t fontnum; // This is the font that was requested
+  int color;
 
   std::vector<size_t> glyphnum;
 
@@ -81,9 +84,10 @@ struct String_record
 
 struct Glyph_atlas
 {
-  Glyph_atlas(int in_width, int in_height);
+  Glyph_atlas(int in_width, int in_height, bool in_mono);
   ~Glyph_atlas();
   int width, height;
+  bool mono;
   int buffer_generation;  // If this changes, all glyph positions may have changed.
   bool has_new_glyphs;    // This is set true every time new glyphs are added
   std::vector<unsigned char> buffer;
@@ -106,16 +110,15 @@ struct Glyph_atlas
   size_t find_font(void* font);
   size_t add_font(Font_record& f);
 
-  size_t find_glyph(uint32_t glyph, size_t fontnum);
+  size_t find_glyph(uint32_t glyph, size_t fontnum, int color);
   size_t add_glyph(Glyph_record& g);
 
   void draw_glyph_to_buffer(Glyph_record& g, int x, int y);
 
   size_t find_string(const char *text, size_t fontnum,
-                             int mono = 1, int *color = nullptr);
+                     int color = 0xFF);
   size_t add_string(const char *new_string, size_t fontnum,
-                  int mono = 1,
-                  int *color = nullptr);
+                  int color = 0xFF);
 
   void* getFont(const char *family, int font,
                 const char *fontfile, double size);
