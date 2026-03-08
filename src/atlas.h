@@ -11,10 +11,9 @@ namespace textRaster {
 struct Glyph_atlas;
 
 struct Font_record {
-  explicit Font_record(Glyph_atlas& in_atlas, void* in_font);
+  explicit Font_record(Glyph_atlas& in_atlas, void* in_font, const char* in_description);
   ~Font_record();
-  void setFont(void* new_font);
-  void* getFont();
+  void setFont(void* new_font, const char* new_description);
   void Rprint(bool verbose = true);
 
   Glyph_atlas* atlas;
@@ -48,7 +47,7 @@ struct Glyph_record
 
   int x_atlas, y_atlas;
   int width, height;
-  int x, y;
+  double x, y;
 
   void setUV();
   float u[4], v[4];
@@ -72,8 +71,8 @@ struct String_record
 
   /* These are shaping adjustments */
 
-  std::vector<float> x_offset;
-  std::vector<float> y_offset;
+  std::vector<double> x_offset;
+  std::vector<double> y_offset;
 };
 
 /* Glyphs are rendered into the bitmap with increasing
@@ -106,8 +105,7 @@ struct Glyph_atlas
   std::vector<Glyph_record> glyphs;
   std::vector<String_record> strings;
 
-  void clear_font_cache();
-  size_t find_font(void* font);
+  size_t find_font(void* font); /* checks and adds if necessary */
   size_t add_font(Font_record& f);
 
   size_t find_glyph(uint32_t glyph, size_t fontnum, int color);
@@ -123,8 +121,9 @@ struct Glyph_atlas
   void* getFont(const char *family, int font,
                 const char *fontfile, double size);
 
-  void copy_glyphs_to_buffer(int old_width, int old_height, std::vector<unsigned char> old_buffer);
+  void copy_glyphs_to_buffer(int old_width, int old_height, std::vector<unsigned char>& old_buffer);
   void Rprint(bool verbose = true);
+  void RprintBuffer(const char* title, std::vector<unsigned char>& buf, int rows = 8, int cols = 8);
 
   void* context;
   void initContext();
@@ -132,6 +131,5 @@ struct Glyph_atlas
 };
 
 };
-
 
 #endif // RASTERTEXT_H
