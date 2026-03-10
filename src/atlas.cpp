@@ -5,6 +5,7 @@
 #include "R.h"          // for debugging
 #include "rasterText.h"
 #include <numeric>
+#include <algorithm>
 
 using namespace textRaster;
 
