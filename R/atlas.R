@@ -76,7 +76,7 @@ print.glyph_atlas <- function(x, verbose = FALSE, ...) {
   if (verbose) {
     for (i in seq_len(nrow(x$strings))) {
       print(x$strings[i,])
-      print(subset(x$fragments, stringnum == i))
+      print(x$fragments[x$fragments$stringnum == i,])
     }
   }
   invisible(x)
@@ -86,6 +86,9 @@ print.glyph_atlas <- function(x, verbose = FALSE, ...) {
 #' @param x The glyph atlas to plot.
 #' @param y Ignored.
 #' @param interpolate Whether to interpolate pixels.
+#' @param ... Extra parameters are passed to the default
+#' plot method, but are ignored in the print method.
+#' @importFrom graphics par
 #' @export
 plot.glyph_atlas <- function(x, y, interpolate = FALSE, ...) {
   b <- x$buffer
@@ -99,6 +102,13 @@ plot.glyph_atlas <- function(x, y, interpolate = FALSE, ...) {
   plot(raster, interpolate = interpolate, ...)
 }
 
+#' Convert buffer to raster
+#'
+#' This function converts the buffer component from
+#' a \code{\link{glyphAtlas}} result to a raster object
+#' that can be plotted in R.
+#' @param buffer The buffer component of a glyph atlas.
+#'
 #' @export
 bufferToRaster <- function(buffer) {
   if (length(dim(buffer)) == 2)
@@ -122,7 +132,7 @@ bufferToRaster <- function(buffer) {
 #' @param interpolate Smooth the rendering?
 #' @param showBaselines Show the baselines for each string?
 #' @param ... Additional plot parameters.
-#'
+#' @importFrom graphics rasterImage segments
 #' @export
 renderFromAtlas <- function(atlas, num, x = 0, y = 0,
                             verbose = FALSE,
@@ -133,8 +143,9 @@ renderFromAtlas <- function(atlas, num, x = 0, y = 0,
   xlims <- list()
   x <- rep_len(x, length(num))
   y <- rep_len(y, length(num))
+  frags <- list()
   for (i in seq_along(num)) {
-    fragment <- subset(atlas$fragments, stringnum == num[i])
+    frags[[i]] <- fragment <- atlas$fragments[atlas$fragments$stringnum == num[i],]
     glyphs <- cbind(fragment, atlas$glyphs[fragment$glyphnum,])
     xlims[[i]] <- range(c(x[i] + glyphs$x_offset + glyphs$x,
                           x[i] + glyphs$x_offset + glyphs$x + glyphs$width))
@@ -151,7 +162,7 @@ renderFromAtlas <- function(atlas, num, x = 0, y = 0,
       font <- atlas$fonts[string$fontnum]
       message("Rendering '", string$text, "' in font ", font)
     }
-    fragment <- subset(atlas$fragments, stringnum == num[i])
+    fragment <- frags[[i]]
     glyphs <- cbind(fragment, atlas$glyphs[fragment$glyphnum,])
     if (showBaselines)
       segments(xlims[[i]][1], y[i], xlims[[i]][2], y[i])

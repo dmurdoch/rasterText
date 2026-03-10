@@ -3,3 +3,4 @@
 Makevars$
 ^\.github$
 ^README\.Rmd$
+^compile_commands.json$

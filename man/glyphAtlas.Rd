@@ -37,6 +37,9 @@ to this value.}
 
 \item{verbose}{Whether to give a verbose display.}
 
+\item{...}{Extra parameters are passed to the default
+plot method, but are ignored in the print method.}
+
 \item{y}{Ignored.}
 
 \item{interpolate}{Whether to interpolate pixels.}

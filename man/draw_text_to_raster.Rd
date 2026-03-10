@@ -2,7 +2,7 @@
 % Please edit documentation in R/draw_text_to_raster.R
 \name{draw_text_to_raster}
 \alias{draw_text_to_raster}
-\title{Draw text to a raster}
+\title{Draw Text to a Raster}
 \usage{
 draw_text_to_raster(
   text,
@@ -37,7 +37,7 @@ A native raster object with attribute
   text string in the raster.
 }
 \description{
-Draw text to a raster
+Draw Text to a Raster
 }
 \examples{
 text <- "Tokyo (\u6771\u4eac) \U1F600"
