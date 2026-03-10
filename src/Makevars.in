@@ -1,3 +1,4 @@
 # src/Makevars.in  — filled in by configure
 PKG_CFLAGS = @PKG_CFLAGS@
+PKG_CXXFLAGS = @PKG_CXXFLAGS@
 PKG_LIBS   = @PKG_LIBS@

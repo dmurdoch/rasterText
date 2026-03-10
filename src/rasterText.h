@@ -1,8 +1,14 @@
-#ifndef TEXTSET_H
-#define TEXTSET_H
+#ifndef RASTERTEXT_H
+#define RASTERTEXT_H
 
 #include <R.h>
 #include <Rinternals.h>
+
+#include <pango/pango.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* The version number will be an integer, changing only
  * when the C API changes incompatibly
@@ -71,4 +77,14 @@ void draw_text_to_buffer(int n,
                                          int width, int height, int stride,
                                          unsigned char *buffer);
 
+PangoFontDescription * getFontDesc(
+    const char *family,
+    int font,
+    const char *fontfile,
+    double size
+);
+
+#ifdef __cplusplus
+}
+#endif
 #endif // RASTERTEXT_H

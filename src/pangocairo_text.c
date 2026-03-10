@@ -397,6 +397,10 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
   return result;
 }
 
+SEXP test_atlasR(SEXP text);
+
+SEXP build_atlasR(SEXP text, SEXP family, SEXP font, SEXP cex, SEXP rgb, SEXP monochrome, SEXP prevatlas);
+
 #define STRINGIZE(x) #x
 #define RNAME(name) STRINGIZE(C_##name)
 #define CALLDEF(name, n) {RNAME(name), (DL_FUNC) &name, n}
@@ -405,6 +409,7 @@ static const R_CallMethodDef R_CallDef[] = {
   CALLDEF(measure_textR, 5),
   CALLDEF(pack_textR, 3),
   CALLDEF(draw_text_to_rasterR, 11),
+  CALLDEF(build_atlasR, 7),
   {NULL, NULL, 0}
 };
 

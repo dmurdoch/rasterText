@@ -24,13 +24,16 @@ be usable by other packages that need to render text
 to a raster.  This can be done through R code or by
 direct calls to the underlying C code.
 
-It does just 3 things:  given a vector of strings and 
+It does just a few things:  given a vector of strings and 
 font descriptions in the format used by `rgl` (which is
 very similar to what base R graphics uses), it can:
 
 1.  Measure the strings in terms of pixels.
 2.  Pack the strings into a single rectangular region.
 3.  Render the strings into a rectangular raster.
+4.  Alternatively, break up the strings into individual
+glyphs, and pack those into a rectangular raster atlas.
+5.  Draw text by extracting each glyph from the atlas.
 
 ## Installation
 
@@ -52,7 +55,7 @@ text <- c("abc", "Tokyo (\u6771\u4eac)", "\u6771\u4eac", "abc")
 
 family <- "serif"
 font <- 1
-cex <- 3
+cex <- 5
 
 m <- measure_text(text, family, font, cex = cex)
 m
@@ -60,4 +63,11 @@ p <- pack_text(text, m, max(m[, "width"]))
 p
 raster <- draw_text_to_raster(text, family, font, cex = cex, measure=m, pack=p)
 plot(raster)
+
+a <- glyphAtlas(text, family, font, cex = cex, monochrome = FALSE)
+a
+plot(a)
+
+# Render just the second string
+renderFromAtlas(a, 2)
 ```

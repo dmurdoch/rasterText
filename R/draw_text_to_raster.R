@@ -1,5 +1,5 @@
 
-#' Draw text to a raster
+#' Draw Text to a Raster
 #'
 #' @param text A character string to measure
 #' @param family,font,cex Characteristics of the text
