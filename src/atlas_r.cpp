@@ -3,7 +3,7 @@
  */
 
 #include "atlas.h"
-#include "R.h"
+#include "Rinternals.h"
 #include "rasterText.h"
 #include <numeric>
 
@@ -403,6 +403,7 @@ extern "C" {
                   col);
     }
     atlas.clearContext();
+    atlas.Rprint();
     return get_atlas(atlas);
   }
 }
@@ -413,11 +414,8 @@ void build_atlas(Glyph_atlas& atlas,
                  int rfont,
                  float size, int color) {
   // this adds a ref to font
-  void *font = atlas.getFont(family, rfont, nullptr, size);
-  size_t fontnum = atlas.find_font(font);
-  // this removes the ref.  We can assume the
-  // one we found had a ref added.
-  g_object_unref(font);
+  std::string desc = atlas.getFont(family, rfont, nullptr, size);
+  size_t fontnum = atlas.find_font(desc);
   atlas.find_string(text, fontnum, color);
 }
 

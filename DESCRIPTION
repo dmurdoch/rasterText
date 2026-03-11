@@ -20,5 +20,7 @@ Depends: R (>= 4.1.0)
 RoxygenNote: 7.3.3
 URL: https://github.com/dmurdoch/rasterText
 BugReports: https://github.com/dmurdoch/rasterText/issues
-SystemRequirements: pango, pangocairo, fontconfig, harfbuzz
+LinkingTo: 
+    systemfonts,
+    textshaping
 Config/build/compilation-database: true

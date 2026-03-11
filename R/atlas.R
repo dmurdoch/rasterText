@@ -35,6 +35,8 @@
 #' plot(atlas_color)
 #'
 #' atlas_mono2 <- glyphAtlas("hello", atlas = atlas_monochrome)
+#' @importFrom systemfonts font_info
+#' @importFrom textshaping shape_text
 #' @export
 glyphAtlas <- function(text, family = "sans", font = 1,
                        cex = 1, col = "black",

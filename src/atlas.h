@@ -13,20 +13,27 @@ struct Font_record {
   explicit Font_record(Glyph_atlas& in_atlas, void* in_font, const char* in_description);
   ~Font_record();
   void setFont(void* new_font, const char* new_description);
+
   void Rprint(bool verbose = true);
 
   Glyph_atlas* atlas;
 
-  /* This depends on the rendering system.  For
-   * PangoCairo, font would be a PangoFont*. Those
-   * are both only valid during short intervals, but
-   * is cached here when known to be valid, and
-   * set to nullptr otherwise.
+  /* This depends on the rendering system.
+   * For systemfont, font would be a record
+   * containing details and a FontSettings*
+   * pointer.
    */
   void* font;
 
   unsigned int hash;
   std::string description;
+
+  /* These are used by textshaping/systemfonts code,
+   * but not by Pango/Cairo code
+   */
+  std::string file;
+  int index;
+  double size;
 };
 
 struct Glyph_record
@@ -104,7 +111,7 @@ struct Glyph_atlas
   std::vector<Glyph_record> glyphs;
   std::vector<String_record> strings;
 
-  size_t find_font(void* font); /* checks and adds if necessary */
+  size_t find_font(std::string desc); /* checks and adds if necessary */
   size_t add_font(Font_record& f);
 
   size_t find_glyph(uint32_t glyph, size_t fontnum, int color);
@@ -117,7 +124,7 @@ struct Glyph_atlas
   size_t add_string(const char *new_string, size_t fontnum,
                   int color = 0xFF);
 
-  void* getFont(const char *family, int font,
+  std::string getFont(const char *family, int font,
                 const char *fontfile, double size);
 
   void copy_glyphs_to_buffer(int old_width, int old_height, std::vector<unsigned char>& old_buffer);

@@ -1,3 +1,4 @@
+#ifdef notused
 #ifndef RASTERTEXT_H
 #define RASTERTEXT_H
 
@@ -88,3 +89,4 @@ PangoFontDescription * getFontDesc(
 }
 #endif
 #endif // RASTERTEXT_H
+#endif

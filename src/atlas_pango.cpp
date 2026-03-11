@@ -1,6 +1,7 @@
 /*********************************************
  Pango-specific functions are in this file
  **********************************************/
+#ifdef notused
 
 #include "atlas.h"
 #include "R.h"                 // for debugging
@@ -313,3 +314,4 @@ void Glyph_atlas::draw_glyph_to_buffer(Glyph_record& g, int x, int y) {
 
   pango_glyph_string_free(gs);
 }
+#endif

@@ -1,3 +1,4 @@
+#ifdef notused
 #define R_NO_REMAP
 
 #include "rasterText.h"
@@ -11,9 +12,7 @@
 
 
 
-int API_version(void) {
-  return 7;
-}
+
 
 /* In this one, keys is an array of char pointers,
  * all of which share the same characteristics. If the keys are equal,
@@ -398,6 +397,14 @@ SEXP draw_text_to_rasterR(SEXP x, SEXP y, SEXP texts,
 }
 
 SEXP test_atlasR(SEXP text);
+#endif
+
+int API_version(void);
+
+int API_version(void) {
+  return 8;
+}
+#include <Rinternals.h>
 
 SEXP build_atlasR(SEXP text, SEXP family, SEXP font, SEXP cex, SEXP rgb, SEXP monochrome, SEXP prevatlas);
 
@@ -406,9 +413,10 @@ SEXP build_atlasR(SEXP text, SEXP family, SEXP font, SEXP cex, SEXP rgb, SEXP mo
 #define CALLDEF(name, n) {RNAME(name), (DL_FUNC) &name, n}
 
 static const R_CallMethodDef R_CallDef[] = {
-  CALLDEF(measure_textR, 5),
-  CALLDEF(pack_textR, 3),
-  CALLDEF(draw_text_to_rasterR, 11),
+
+//  CALLDEF(measure_textR, 5),
+//  CALLDEF(pack_textR, 3),
+//  CALLDEF(draw_text_to_rasterR, 11),
   CALLDEF(build_atlasR, 7),
   {NULL, NULL, 0}
 };
@@ -421,9 +429,10 @@ void R_init_rasterText(DllInfo *dll)
 
   R_RegisterCCallable("rasterText", "API_version",
                       (DL_FUNC)API_version);
-  R_RegisterCCallable("rasterText", "measure_text", (DL_FUNC)measure_text);
-  R_RegisterCCallable("rasterText", "get_buffer_stride", (DL_FUNC)get_buffer_stride);
-  R_RegisterCCallable("rasterText", "pack_text", (DL_FUNC)pack_text);
-  R_RegisterCCallable("rasterText", "draw_text_to_buffer",
-                      (DL_FUNC)draw_text_to_buffer);
+//  R_RegisterCCallable("rasterText", "measure_text", (DL_FUNC)measure_text);
+//  R_RegisterCCallable("rasterText", "get_buffer_stride", (DL_FUNC)get_buffer_stride);
+//  R_RegisterCCallable("rasterText", "pack_text", (DL_FUNC)pack_text);
+//  R_RegisterCCallable("rasterText", "draw_text_to_buffer",
+//                      (DL_FUNC)draw_text_to_buffer);
 }
+
